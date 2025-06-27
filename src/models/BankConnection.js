@@ -89,25 +89,50 @@ class BankConnectionModel {
         refresh_token,
         token_expires_at,
         token_source,
-        powens_user_id_from_api
+        powens_user_id_from_api,
+        connection_type = 'powens'
       } = connectionData;
+
+      // Check for existing connection first to prevent duplicates
+      const existingConnection = await this.findExistingConnection(user_id, bank_name, connection_type);
+      if (existingConnection) {
+        logger.info('Updating existing bank connection instead of creating duplicate', {
+          userId: user_id,
+          bankName: bank_name,
+          existingConnectionId: existingConnection.id
+        });
+        
+        // Update existing connection with new tokens
+        return await this.updateTokens(
+          existingConnection.id, 
+          access_token, 
+          refresh_token, 
+          token_expires_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 1 month default
+        );
+      }
 
       // Encrypt sensitive tokens
       const access_token_encrypted = encrypt(access_token);
       const refresh_token_encrypted = encrypt(refresh_token);
 
+      // Set token expiration to 1 month if not provided or if longer than 1 month
+      const oneMonthFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const finalExpiresAt = token_expires_at && new Date(token_expires_at) < oneMonthFromNow 
+        ? token_expires_at 
+        : oneMonthFromNow;
+
       const result = await database.query(`
         INSERT INTO bank_connections (
           user_id, powens_user_id, powens_connection_id, bank_name, bank_logo_url,
           access_token_encrypted, refresh_token_encrypted, token_expires_at, 
-          status, token_source, powens_user_id_from_api
+          status, token_source, powens_user_id_from_api, connection_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9, $10, $11)
         RETURNING *
       `, [
         user_id, powens_user_id, powens_connection_id, bank_name, bank_logo_url,
-        access_token_encrypted, refresh_token_encrypted, token_expires_at,
-        token_source || 'oauth', powens_user_id_from_api
+        access_token_encrypted, refresh_token_encrypted, finalExpiresAt,
+        token_source || 'oauth', powens_user_id_from_api, connection_type
       ]);
 
       logDBOperation('create', 'bank_connections', { connectionId: result.rows[0].id, bankName: bank_name });
@@ -262,6 +287,46 @@ class BankConnectionModel {
       return result.rows[0] || null;
     } catch (error) {
       logDBOperation('findByPowensConnectionId', 'bank_connections', { powensConnectionId }, error);
+      throw error;
+    }
+  }
+
+  // Find existing connection to prevent duplicates
+  static async findExistingConnection(userId, bankName, connectionType = 'powens') {
+    try {
+      const result = await database.query(`
+        SELECT * FROM bank_connections 
+        WHERE user_id = $1 AND bank_name = $2 AND connection_type = $3
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [userId, bankName, connectionType]);
+
+      logDBOperation('findExistingConnection', 'bank_connections', { 
+        userId, 
+        bankName, 
+        connectionType, 
+        found: result.rows.length > 0 
+      });
+      return result.rows[0] || null;
+    } catch (error) {
+      logDBOperation('findExistingConnection', 'bank_connections', { userId, bankName, connectionType }, error);
+      throw error;
+    }
+  }
+
+  // Get connections with expired tokens
+  static async getExpiredTokenConnections() {
+    try {
+      const result = await database.query(`
+        SELECT * FROM bank_connections 
+        WHERE token_expires_at <= NOW() AND status = 'active'
+        ORDER BY token_expires_at ASC
+      `);
+
+      logDBOperation('getExpiredTokenConnections', 'bank_connections', { found: result.rows.length });
+      return result.rows;
+    } catch (error) {
+      logDBOperation('getExpiredTokenConnections', 'bank_connections', {}, error);
       throw error;
     }
   }

@@ -75,7 +75,18 @@ This is a Node.js/Express banking data collection service that integrates with t
 - BankAccounts → Transactions (1:many)
 - Comprehensive foreign key constraints
 
-## Development Guidelines
+## Development vs Production Environment
+
+**Important**: This repository is for development purposes only. It is NOT the production server.
+
+### Deployment Process
+1. **Development**: Make changes and commit to this GitHub repository
+2. **Production Deployment**: Manual process on the server side:
+   - `git pull` to get latest changes from this repository
+   - `npm install` to install any new dependencies
+   - `npm start` to restart the production server
+
+### Development Guidelines
 
 ### Before Making Changes
 1. Read `docs/AGENTIC_DEVELOPMENT.md` for comprehensive development protocols
@@ -91,6 +102,7 @@ This is a Node.js/Express banking data collection service that integrates with t
 - Consistent middleware stack: logging, rate limiting, CORS, security headers
 
 ### Environment Configuration
+- Database: PostgreSQL database named `fire_planning`
 - Database connection via `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - Powens API credentials: `POWENS_CLIENT_ID`, `POWENS_CLIENT_SECRET`
 - Optional features controlled by environment flags (e.g., `ENABLE_API_DOCS`)

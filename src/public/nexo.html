@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexo Integration - FIRE Planning</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #8e44ad, #9b59b6);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #8e44ad;
+            padding-bottom: 10px;
+        }
+        
+        .button {
+            display: inline-block;
+            background: #8e44ad;
+            color: white;
+            padding: 12px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 5px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .button:hover {
+            background: #7d3c98;
+        }
+        
+        .button.secondary {
+            background: #95a5a6;
+        }
+        
+        .button.success {
+            background: #27ae60;
+        }
+        
+        .button.warning {
+            background: #f39c12;
+        }
+        
+        .result-container {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            min-height: 200px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-connected {
+            background-color: #27ae60;
+        }
+        
+        .status-disconnected {
+            background-color: #e74c3c;
+        }
+        
+        .status-unknown {
+            background-color: #f39c12;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        .back-link {
+            color: #8e44ad;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #8e44ad;
+            box-shadow: 0 0 0 2px rgba(142, 68, 173, 0.1);
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+        }
+        
+        .asset-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+        
+        .asset-symbol {
+            font-weight: bold;
+            color: #8e44ad;
+            font-size: 16px;
+        }
+        
+        .asset-blockchain {
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>₿ Nexo Payment Gateway Integration</h1>
+        <p>Cryptocurrency Asset Management & Deposit Address Creation</p>
+        <a href="/" class="back-link" style="color: #ecf0f1;">← Back to Dashboard</a>
+    </div>
+
+    <div class="section">
+        <h2>Connection Status</h2>
+        <button onclick="checkStatus()" class="button">Check Connection</button>
+        <div id="statusResult" class="result-container">
+            Click "Check Connection" to verify Nexo API configuration
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Assets Section -->
+        <div class="section">
+            <h2>Supported Assets</h2>
+            <p>Fetch all cryptocurrency assets supported by your Nexo Payment Gateway configuration:</p>
+            <button onclick="fetchAssets()" class="button success">Fetch Assets</button>
+            <div id="assetsResult" class="result-container">
+                Click "Fetch Assets" to load supported cryptocurrency assets
+            </div>
+        </div>
+
+        <!-- Deposit Address Creation -->
+        <div class="section">
+            <h2>Create Deposit Address</h2>
+            <p>Generate a deposit address for a specific asset and reference ID:</p>
+            
+            <div class="form-group">
+                <label for="referenceId">Reference ID:</label>
+                <input 
+                    type="text" 
+                    id="referenceId" 
+                    placeholder="merchant_reference_ID-1" 
+                    maxlength="50"
+                    pattern="[a-zA-Z0-9\-_]+"
+                    title="Only alphanumeric characters, hyphens, and underscores allowed"
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="assetSymbol">Asset Symbol:</label>
+                <input 
+                    type="text" 
+                    id="assetSymbol" 
+                    placeholder="BTC" 
+                    pattern="[a-zA-Z0-9\-_]+"
+                    title="Asset symbol (e.g., BTC, ETH, USDT_ETH)"
+                >
+            </div>
+            
+            <button onclick="createAddress()" class="button warning">Create Address</button>
+            <div id="addressResult" class="result-container">
+                Fill in the form above and click "Create Address"
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Section -->
+    <div class="section">
+        <h2>API Configuration</h2>
+        <button onclick="getConfig()" class="button secondary">View Config</button>
+        <div id="configResult" class="result-container">
+            Click "View Config" to see current configuration
+        </div>
+        
+        <h3>Environment Setup</h3>
+        <p>To configure Nexo integration, add these environment variables to your <code>.env</code> file:</p>
+        <pre>
+# Nexo API Configuration
+NEXO_API_KEY=your_nexo_api_key_here
+NEXO_API_BASE_URL=https://pg.nexo.com/api/v1
+NEXO_WEBHOOK_SECRET=your_webhook_secret_here
+        </pre>
+    </div>
+
+    <!-- Testing Section -->
+    <div class="section">
+        <h2>API Testing</h2>
+        <p><strong>Test Nexo endpoints with curl:</strong></p>
+        <pre>
+# Check connection status
+curl http://localhost:3000/api/nexo/status
+
+# Get supported assets (requires API key)
+curl -H "x-api-key: YOUR_NEXO_API_KEY" http://localhost:3000/api/nexo/assets
+
+# Create deposit address
+curl -X POST http://localhost:3000/api/nexo/addresses \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_NEXO_API_KEY" \
+  -d '{"referenceId": "test-123", "asset": "BTC"}'
+
+# View configuration
+curl http://localhost:3000/api/nexo/config
+        </pre>
+    </div>
+
+    <!-- Webhook Information -->
+    <div class="section">
+        <h2>Webhook Configuration</h2>
+        <p>Configure your Nexo Payment Gateway dashboard to send webhooks to:</p>
+        <pre>POST http://your-domain.com:3000/api/nexo/webhook</pre>
+        
+        <p><strong>Supported webhook events:</strong></p>
+        <ul>
+            <li><code>PG_DEPOSIT</code> - Cryptocurrency deposit received</li>
+        </ul>
+        
+        <p><strong>Webhook payload example:</strong></p>
+        <pre>{
+  "eventType": "PG_DEPOSIT",
+  "data": {
+    "transactionId": "bfd5f586-a706-4d26-8ca1-ea91dbecea2b",
+    "transactionHash": "0x02fc56662f353ebc4300d21690464e0e8afb77edc2329124b9f8b7e341f43896",
+    "referenceId": "merchant_reference_ID-1",
+    "depositAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "asset": "ETH",
+    "amount": "0.00042142",
+    "timestamp": "2020-07-28T13:53:24.674Z",
+    "fiat": {
+      "usd": {
+        "value": "27.76630856",
+        "course": "13.88315428"
+      }
+    }
+  }
+}</pre>
+    </div>
+
+    <script>
+        // Helper function to format JSON
+        function formatJSON(data) {
+            return JSON.stringify(data, null, 2);
+        }
+
+        // Helper function to display results
+        function displayResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.color = isError ? '#e74c3c' : '#2c3e50';
+            element.textContent = typeof data === 'string' ? data : formatJSON(data);
+        }
+
+        // Check connection status
+        async function checkStatus() {
+            try {
+                displayResult('statusResult', 'Checking connection status...');
+                
+                const response = await fetch('/api/nexo/status');
+                const data = await response.json();
+                
+                displayResult('statusResult', data, !data.success);
+            } catch (error) {
+                displayResult('statusResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        // Fetch supported assets
+        async function fetchAssets() {
+            try {
+                displayResult('assetsResult', 'Fetching supported assets...');
+                
+                const response = await fetch('/api/nexo/assets');
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.assets) {
+                    // Create a nice display for assets
+                    let assetsHtml = `<div style="color: #27ae60; font-weight: bold; margin-bottom: 15px;">
+                        ✓ Found ${data.data.assets.length} supported assets:
+                    </div>`;
+                    
+                    data.data.assets.forEach(asset => {
+                        assetsHtml += `
+                            <div class="asset-card">
+                                <div class="asset-symbol">${asset.asset}</div>
+                                <div class="asset-blockchain">Blockchain: ${asset.blockchain}</div>
+                                ${asset.address ? `<div style="font-size: 12px; color: #6c757d;">Contract: ${asset.address}</div>` : ''}
+                                <div style="font-size: 12px; color: #6c757d;">Decimals: ${asset.decimals}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    document.getElementById('assetsResult').innerHTML = assetsHtml;
+                    
+                    // Also show raw JSON
+                    console.log('Raw Nexo Assets Response:', data);
+                } else {
+                    displayResult('assetsResult', data, !data.success);
+                }
+            } catch (error) {
+                displayResult('assetsResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        // Create deposit address
+        async function createAddress() {
+            try {
+                const referenceId = document.getElementById('referenceId').value.trim();
+                const assetSymbol = document.getElementById('assetSymbol').value.trim();
+                
+                if (!referenceId || !assetSymbol) {
+                    displayResult('addressResult', 'Error: Both Reference ID and Asset Symbol are required', true);
+                    return;
+                }
+
+                displayResult('addressResult', 'Creating deposit address...');
+                
+                const response = await fetch('/api/nexo/addresses', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        referenceId: referenceId,
+                        asset: assetSymbol
+                    })
+                });
+                
+                const data = await response.json();
+                displayResult('addressResult', data, !data.success);
+            } catch (error) {
+                displayResult('addressResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        // Get configuration
+        async function getConfig() {
+            try {
+                displayResult('configResult', 'Fetching configuration...');
+                
+                const response = await fetch('/api/nexo/config');
+                const data = await response.json();
+                
+                displayResult('configResult', data, !data.success);
+            } catch (error) {
+                displayResult('configResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        // Auto-check status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkStatus();
+        });
+    </script>
+</body>
+</html>

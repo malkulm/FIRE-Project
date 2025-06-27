@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIRE Planning - Developer Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .link-button {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 12px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 5px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .link-button:hover {
+            background: #2980b9;
+        }
+        
+        .link-button.secondary {
+            background: #95a5a6;
+        }
+        
+        .link-button.success {
+            background: #27ae60;
+        }
+        
+        .link-button.warning {
+            background: #f39c12;
+        }
+        
+        .link-button.nexo {
+            background: #8e44ad;
+        }
+        
+        .link-button.nexo:hover {
+            background: #7d3c98;
+        }
+        
+        .link-button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .result-frame {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .highlight-box {
+            background: #e8f5e8;
+            border: 2px solid #27ae60;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .highlight-box.nexo {
+            background: #f3e5f5;
+            border: 2px solid #8e44ad;
+        }
+        
+        .highlight-box h3 {
+            color: #27ae60;
+            margin-top: 0;
+        }
+        
+        .highlight-box.nexo h3 {
+            color: #8e44ad;
+        }
+        
+        .step-counter {
+            background: #3498db;
+            color: white;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .notification {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .notification.success {
+            background: #d5f4e6;
+            border: 1px solid #27ae60;
+            color: #1e7e34;
+        }
+        
+        .notification.error {
+            background: #fadbd8;
+            border: 1px solid #e74c3c;
+            color: #721c24;
+        }
+        
+        .notification.info {
+            background: #d1ecf1;
+            border: 1px solid #3498db;
+            color: #0c5460;
+        }
+        
+        .connector-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 FIRE Planning - Developer Dashboard</h1>
+        <p>Banking & Crypto Data Collection Service</p>
+        <p><strong>User:</strong> admin@fire-planning.local (Development Mode)</p>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Data Source Connectors -->
+    <div class="connector-grid">
+        <!-- Powens Bank Connector -->
+        <div class="highlight-box">
+            <h3>🏦 Bank Data Connection (Powens)</h3>
+            <p><strong>Connect your bank accounts through Powens secure interface:</strong></p>
+            <ol>
+                <li>Click "Launch Powens Connector" below</li>
+                <li>Complete bank authentication in the new window</li>
+                <li>Return here and view your imported data</li>
+            </ol>
+            <button id="connectBankBtn" class="link-button success" style="font-size: 16px; padding: 15px 25px;">
+                🚀 Launch Powens Connector
+            </button>
+            <div id="connectionStatus" style="margin-top: 10px; font-weight: bold;"></div>
+        </div>
+
+        <!-- Nexo Crypto Connector -->
+        <div class="highlight-box nexo">
+            <h3>₿ Crypto Data Connection (Nexo)</h3>
+            <p><strong>Connect to Nexo Payment Gateway for crypto asset data:</strong></p>
+            <ol>
+                <li>Configure your Nexo API key in settings</li>
+                <li>Click "Connect Nexo API" to test connection</li>
+                <li>View your supported crypto assets</li>
+            </ol>
+            <a href="/nexo" class="link-button nexo" style="font-size: 16px; padding: 15px 25px;">
+                ⚡ Connect Nexo API
+            </a>
+            <div id="nexoStatus" style="margin-top: 10px; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- System Status -->
+        <div class="section">
+            <h2>System Status</h2>
+            <a href="/health" class="link-button" target="health-result">Check Health</a>
+            <iframe name="health-result" class="result-frame"></iframe>
+        </div>
+
+        <!-- Powens Management -->
+        <div class="section">
+            <h2>Powens Management</h2>
+            <a href="/api/auth/powens/url" class="link-button secondary" target="powens-result">Get Auth URL (Manual)</a>
+            <a href="/api/auth/powens/connections" class="link-button secondary" target="powens-result">List Connections</a>
+            <form action="/api/auth/powens/refresh" method="POST" target="powens-result" style="display: inline;">
+                <button type="submit" class="link-button warning">Refresh Tokens</button>
+            </form>
+            <iframe name="powens-result" class="result-frame"></iframe>
+        </div>
+
+        <!-- Data Viewing (Simplified) -->
+        <div class="section">
+            <h2>Banking Data</h2>
+            <button id="viewAccountsBtn" class="link-button success" onclick="viewAccounts()">📊 View Accounts</button>
+            <button id="viewTransactionsBtn" class="link-button" onclick="viewTransactions()">💳 View Transactions</button>
+            <a href="/api/sync/debug/connections" class="link-button secondary" target="data-result">Debug Connections</a>
+            <iframe name="data-result" class="result-frame"></iframe>
+        </div>
+
+        <!-- External Data Links -->
+        <div class="section">
+            <h2>Raw Data Access</h2>
+            <a href="/api/accounts" class="link-button secondary" target="raw-result">All Accounts (JSON)</a>
+            <a href="/api/transactions" class="link-button secondary" target="raw-result">All Transactions (JSON)</a>
+            <a href="/api/transactions?limit=10" class="link-button secondary" target="raw-result">Recent 10 Transactions</a>
+            <iframe name="raw-result" class="result-frame"></iframe>
+        </div>
+    </div>
+
+    <!-- Development Workflow -->
+    <div class="section">
+        <h2>🧪 Development Workflow</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db;">
+                <h4><span class="step-counter">1</span>Connect Sources</h4>
+                <p>Use "Launch Powens Connector" for banks and "Connect Nexo API" for crypto.</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #e67e22;">
+                <h4><span class="step-counter">2</span>View Data</h4>
+                <p>Click "View Accounts" and "View Transactions" to see imported data.</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #27ae60;">
+                <h4><span class="step-counter">3</span>Monitor</h4>
+                <p>Use debug endpoints to troubleshoot connections and data sync.</p>
+            </div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #8e44ad;">
+                <h4><span class="step-counter">4</span>Crypto Assets</h4>
+                <p>Monitor crypto assets through Nexo API integration.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links Section -->
+    <div class="section">
+        <h2>Quick API Links</h2>
+        <p><strong>Direct URLs for testing:</strong></p>
+        <ul>
+            <li><a href="/health" target="_blank">Health Check</a></li>
+            <li><a href="/api/sync/debug/accounts" target="_blank">🔍 Debug: Database Accounts</a></li>
+            <li><a href="/api/sync/debug/transactions" target="_blank">🔍 Debug: Database Transactions</a></li>
+            <li><a href="/api/sync/debug/connections" target="_blank">🔍 Debug: Bank Connections</a></li>
+            <li><a href="/api/auth/powens/connections" target="_blank">Powens Connections (JSON)</a></li>
+            <li><a href="/api/nexo/assets" target="_blank">Nexo Assets (JSON)</a></li>
+        </ul>
+    </div>
+
+    <!-- Testing Section -->
+    <div class="section">
+        <h2>Manual API Testing</h2>
+        <p><strong>Test with curl commands:</strong></p>
+        <pre style="background: #f0f0f0; padding: 10px; border-radius: 5px;">
+# Health check
+curl http://localhost:3000/health
+
+# View accounts in database
+curl http://localhost:3000/api/sync/debug/accounts
+
+# View transactions in database  
+curl http://localhost:3000/api/sync/debug/transactions
+
+# View connections
+curl http://localhost:3000/api/sync/debug/connections
+
+# Raw data endpoints
+curl http://localhost:3000/api/accounts
+curl http://localhost:3000/api/transactions?limit=10
+
+# Get Nexo supported assets
+curl -H "x-api-key: YOUR_NEXO_API_KEY" http://localhost:3000/api/nexo/assets
+        </pre>
+    </div>
+
+    <div class="section">
+        <h2>Instructions</h2>
+        <ol>
+            <li><strong>🚀 Start with data source connections</strong> - Use either Powens for banks or Nexo for crypto</li>
+            <li><strong>🏦 Connect your bank</strong> - Complete authentication in Powens interface</li>
+            <li><strong>₿ Configure Nexo API</strong> - Add your API key to access crypto asset data</li>
+            <li><strong>📊 View your data</strong> - Use "View Accounts" and "View Transactions" buttons</li>
+            <li><strong>🔍 Debug connections</strong> - Use debug endpoints to troubleshoot issues</li>
+        </ol>
+        
+        <p><strong>Note:</strong> This is a development environment. Data is stored as user "admin" in the database.</p>
+    </div>
+
+    <script>
+        // Function to view accounts from database
+        async function viewAccounts() {
+            const button = document.getElementById('viewAccountsBtn');
+            const iframe = document.querySelector('iframe[name="data-result"]');
+            
+            // Disable button and show loading
+            button.disabled = true;
+            button.textContent = 'Loading Accounts...';
+            button.style.backgroundColor = '#95a5a6';
+            
+            try {
+                // Call the debug accounts endpoint
+                const response = await fetch('/api/sync/debug/accounts');
+                const result = await response.json();
+                
+                // Create HTML to display in iframe
+                let html = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; }
+                            .success { color: #27ae60; }
+                            .error { color: #e74c3c; }
+                            .account { 
+                                border: 1px solid #ddd; 
+                                padding: 15px; 
+                                margin: 10px 0; 
+                                border-radius: 5px;
+                                background: #f9f9f9;
+                            }
+                            .summary {
+                                background: #e8f5e8;
+                                border: 1px solid #27ae60;
+                                padding: 15px;
+                                border-radius: 5px;
+                                margin-bottom: 20px;
+                            }
+                            .no-data {
+                                background: #fff3cd;
+                                border: 1px solid #ffeaa7;
+                                padding: 15px;
+                                border-radius: 5px;
+                                color: #856404;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                `;
+                
+                if (result.success) {
+                    html += `
+                        <div class="summary">
+                            <h3 class="success">📊 Bank Accounts in Database</h3>
+                            <p><strong>User ID:</strong> ${result.data.userId}</p>
+                            <p><strong>Total Accounts:</strong> ${result.data.accountsFound}</p>
+                            <p><strong>Last Updated:</strong> ${result.data.timestamp}</p>
+                        </div>
+                    `;
+                    
+                    if (result.data.accountsFound > 0) {
+                        html += `<h3>Account Details:</h3>`;
+                        result.data.accounts.forEach(account => {
+                            html += `
+                                <div class="account">
+                                    <h4>${account.account_name || 'Unnamed Account'}</h4>
+                                    <strong>Balance:</strong> ${account.balance || 0} ${account.currency || 'EUR'}<br>
+                                    <strong>Type:</strong> ${account.account_type || 'Unknown'}<br>
+                                    <strong>Bank:</strong> ${account.bank_name || 'Unknown'}<br>
+                                    <strong>IBAN:</strong> ${account.iban || 'N/A'}<br>
+                                    <strong>Connection ID:</strong> ${account.connection_id || 'N/A'}<br>
+                                    <strong>Powens Account ID:</strong> ${account.powens_account_id || 'N/A'}<br>
+                                    <small><strong>Created:</strong> ${account.created_at || 'Unknown'}</small>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += `
+                            <div class="no-data">
+                                <h3>⚠️ No Accounts Found</h3>
+                                <p>No bank accounts found in the database.</p>
+                                <p><strong>Next steps:</strong></p>
+                                <ul>
+                                    <li>Connect to Powens using "Launch Powens Connector"</li>
+                                    <li>Complete bank authentication</li>
+                                    <li>Check "Debug Connections" to verify connection status</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                } else {
+                    html += `
+                        <div class="error">
+                            <h3>❌ Failed to Load Accounts</h3>
+                            <p><strong>Error:</strong> ${result.message || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+                
+                html += `</body></html>`;
+                
+                // Write HTML to iframe
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(html);
+                iframe.contentDocument.close();
+                
+            } catch (error) {
+                // Display error in iframe
+                const errorHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><style>body{font-family:Arial;padding:20px;}.error{color:#e74c3c;}</style></head>
+                    <body>
+                        <div class="error">
+                            <h3>❌ Request Failed</h3>
+                            <p>Error: ${error.message}</p>
+                        </div>
+                    </body>
+                    </html>
+                `;
+                
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(errorHtml);
+                iframe.contentDocument.close();
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = '📊 View Accounts';
+                button.style.backgroundColor = '#27ae60';
+            }
+        }
+
+        // Function to view transactions from database
+        async function viewTransactions() {
+            const button = document.getElementById('viewTransactionsBtn');
+            const iframe = document.querySelector('iframe[name="data-result"]');
+            
+            // Disable button and show loading
+            button.disabled = true;
+            button.textContent = 'Loading Transactions...';
+            button.style.backgroundColor = '#95a5a6';
+            
+            try {
+                // Call the debug transactions endpoint
+                const response = await fetch('/api/sync/debug/transactions');
+                const result = await response.json();
+                
+                // Create HTML to display in iframe
+                let html = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; }
+                            .success { color: #27ae60; }
+                            .error { color: #e74c3c; }
+                            .transaction { 
+                                border: 1px solid #ddd; 
+                                padding: 15px; 
+                                margin: 10px 0; 
+                                border-radius: 5px;
+                                background: #f9f9f9;
+                            }
+                            .positive { border-left: 4px solid #27ae60; }
+                            .negative { border-left: 4px solid #e74c3c; }
+                            .summary {
+                                background: #e8f5e8;
+                                border: 1px solid #27ae60;
+                                padding: 15px;
+                                border-radius: 5px;
+                                margin-bottom: 20px;
+                            }
+                            .no-data {
+                                background: #fff3cd;
+                                border: 1px solid #ffeaa7;
+                                padding: 15px;
+                                border-radius: 5px;
+                                color: #856404;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                `;
+                
+                if (result.success) {
+                    html += `
+                        <div class="summary">
+                            <h3 class="success">💳 Bank Transactions in Database</h3>
+                            <p><strong>User ID:</strong> ${result.data.userId}</p>
+                            <p><strong>Total Transactions:</strong> ${result.data.transactionsFound}</p>
+                            <p><strong>Showing Latest:</strong> ${result.data.limit}</p>
+                            <p><strong>Last Updated:</strong> ${result.data.timestamp}</p>
+                        </div>
+                    `;
+                    
+                    if (result.data.transactionsFound > 0) {
+                        html += `<h3>Recent Transactions:</h3>`;
+                        result.data.transactions.forEach(transaction => {
+                            const amount = parseFloat(transaction.amount || 0);
+                            const amountClass = amount >= 0 ? 'positive' : 'negative';
+                            const amountSymbol = amount >= 0 ? '+' : '';
+                            
+                            html += `
+                                <div class="transaction ${amountClass}">
+                                    <h4>${transaction.description || 'Unknown Transaction'}</h4>
+                                    <strong>Amount:</strong> ${amountSymbol}${amount} ${transaction.currency || 'EUR'}<br>
+                                    <strong>Date:</strong> ${transaction.transaction_date || 'Unknown'}<br>
+                                    <strong>Type:</strong> ${transaction.transaction_type || 'Unknown'}<br>
+                                    <strong>Category:</strong> ${transaction.category || 'Uncategorized'}<br>
+                                    <strong>Account ID:</strong> ${transaction.account_id || 'N/A'}<br>
+                                    <strong>Powens Transaction ID:</strong> ${transaction.powens_transaction_id || 'N/A'}<br>
+                                    <small><strong>Created:</strong> ${transaction.created_at || 'Unknown'}</small>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        html += `
+                            <div class="no-data">
+                                <h3>⚠️ No Transactions Found</h3>
+                                <p>No bank transactions found in the database.</p>
+                                <p><strong>Next steps:</strong></p>
+                                <ul>
+                                    <li>Ensure bank accounts are connected</li>
+                                    <li>Check if transaction sync is working</li>
+                                    <li>Verify connection status in debug panel</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                } else {
+                    html += `
+                        <div class="error">
+                            <h3>❌ Failed to Load Transactions</h3>
+                            <p><strong>Error:</strong> ${result.message || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+                
+                html += `</body></html>`;
+                
+                // Write HTML to iframe
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(html);
+                iframe.contentDocument.close();
+                
+            } catch (error) {
+                // Display error in iframe
+                const errorHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><style>body{font-family:Arial;padding:20px;}.error{color:#e74c3c;}</style></head>
+                    <body>
+                        <div class="error">
+                            <h3>❌ Request Failed</h3>
+                            <p>Error: ${error.message}</p>
+                        </div>
+                    </body>
+                    </html>
+                `;
+                
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(errorHtml);
+                iframe.contentDocument.close();
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = '💳 View Transactions';
+                button.style.backgroundColor = '#3498db';
+            }
+        }
+    </script>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

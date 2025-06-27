@@ -1,0 +1,48 @@
+{
+  "name": "fire-planning",
+  "version": "1.0.0",
+  "description": "Minimalist banking data collection service via Powens API for FIRE planning",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest",
+    "migrate": "node src/migrations/migrate.js",
+    "seed": "node src/migrations/seed.js"
+  },
+  "keywords": [
+    "banking",
+    "powens",
+    "fire",
+    "planning",
+    "api",
+    "agentic"
+  ],
+  "author": "malkulm",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.4.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "helmet": "^6.1.5",
+    "joi": "^17.9.2",
+    "jsonwebtoken": "^9.0.0",
+    "logger": "^0.0.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.11.0",
+    "uuid": "^9.0.0",
+    "winston": "^3.8.2",
+    "winston-daily-rotate-file": "^4.7.1"
+  },
+  "devDependencies": {
+    "jest": "^29.5.0",
+    "nodemon": "^2.0.22",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

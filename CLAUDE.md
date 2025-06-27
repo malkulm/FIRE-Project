@@ -84,7 +84,8 @@ This is a Node.js/Express banking data collection service that integrates with t
    - **IMPORTANT**: Always run `git push origin main` after committing to ensure changes are pushed to GitHub
 2. **Production Deployment**: Manual process on the server side:
    - `git pull` to get latest changes from this repository
-   - `npm install` to install any new dependencies
+   - `npm install` to install any new dependencies (run this before npm start)
+   - `npm run migrate` to apply any pending database migrations
    - `npm start` to restart the production server
 
 ### Development Guidelines

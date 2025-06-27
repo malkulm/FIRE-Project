@@ -259,69 +259,154 @@ class TransactionModel {
         powensTransactionId: transactionData.powens_transaction_id,
         amount: transactionData.amount,
         accountId: transactionData.account_id,
-        inputData: transactionData,
-        inputFields: Object.keys(transactionData)
+        description: transactionData.description?.substring(0, 50) + '...'
       });
 
-      // First try to find existing transaction
-      const existing = await database.query(`
-        SELECT * FROM transactions WHERE powens_transaction_id = $1 AND user_id = $2
-      `, [transactionData.powens_transaction_id, transactionData.user_id]);
+      // Use a database transaction to ensure atomicity
+      return await database.transaction(async (client) => {
+        // First try to find existing transaction
+        const existing = await client.query(`
+          SELECT * FROM transactions WHERE powens_transaction_id = $1 AND user_id = $2
+        `, [transactionData.powens_transaction_id, transactionData.user_id]);
 
-      if (existing.rows.length > 0) {
-        logger.info('✅ FOUND EXISTING TRANSACTION', {
-          powensTransactionId: transactionData.powens_transaction_id,
-          existingId: existing.rows[0].id,
-          amount: existing.rows[0].amount
-        });
+        if (existing.rows.length > 0) {
+          logger.info('✅ FOUND EXISTING TRANSACTION', {
+            powensTransactionId: transactionData.powens_transaction_id,
+            existingId: existing.rows[0].id,
+            existingAmount: existing.rows[0].amount,
+            newAmount: transactionData.amount
+          });
 
-        // Update existing transaction if needed (e.g., pending status changed)
-        const updateData = {
-          is_pending: transactionData.is_pending || false,
-          balance_after: transactionData.balance_after,
-          powens_metadata: JSON.stringify(transactionData.powens_metadata || {})
-        };
+          // Check if update is needed
+          const existingTx = existing.rows[0];
+          const needsUpdate = 
+            existingTx.is_pending !== (transactionData.is_pending || false) ||
+            existingTx.balance_after !== transactionData.balance_after ||
+            existingTx.amount !== transactionData.amount ||
+            existingTx.description !== transactionData.description;
 
-        const result = await this.update(existing.rows[0].id, updateData);
-        logger.info('✅ EXISTING TRANSACTION UPDATED', {
-          powensTransactionId: transactionData.powens_transaction_id,
-          transactionId: result.id,
-          action: 'updated'
-        });
-        logDBOperation('findOrCreateByPowensId', 'transactions', { transactionId: result.id, action: 'updated' });
-        return result;
-      } else {
-        // Create new transaction
-        logger.info('🆕 CREATING NEW TRANSACTION', {
-          powensTransactionId: transactionData.powens_transaction_id,
-          amount: transactionData.amount,
-          accountId: transactionData.account_id,
-          transactionData: transactionData
-        });
+          if (needsUpdate) {
+            logger.info('🔄 UPDATING EXISTING TRANSACTION', {
+              powensTransactionId: transactionData.powens_transaction_id,
+              changes: {
+                is_pending: { old: existingTx.is_pending, new: transactionData.is_pending || false },
+                balance_after: { old: existingTx.balance_after, new: transactionData.balance_after },
+                amount: { old: existingTx.amount, new: transactionData.amount }
+              }
+            });
 
-        const result = await this.create(transactionData);
-        
-        logger.info('✅ TRANSACTION CREATED SUCCESSFULLY', {
-          powensTransactionId: transactionData.powens_transaction_id,
-          newTransactionId: result.id,
-          amount: result.amount
-        });
-        
-        logDBOperation('findOrCreateByPowensId', 'transactions', { transactionId: result.id, action: 'created' });
-        return result;
-      }
+            // Update the transaction with proper handling
+            const result = await client.query(`
+              UPDATE transactions SET 
+                is_pending = $1,
+                balance_after = $2,
+                amount = $3,
+                description = $4,
+                transaction_date = $5,
+                processed_date = $6,
+                powens_metadata = $7,
+                updated_at = NOW()
+              WHERE id = $8
+              RETURNING *
+            `, [
+              transactionData.is_pending || false,
+              transactionData.balance_after,
+              transactionData.amount,
+              transactionData.description,
+              transactionData.transaction_date,
+              transactionData.processed_date,
+              JSON.stringify(transactionData.powens_metadata || {}),
+              existingTx.id
+            ]);
+
+            logger.info('✅ EXISTING TRANSACTION UPDATED', {
+              powensTransactionId: transactionData.powens_transaction_id,
+              transactionId: result.rows[0].id,
+              action: 'updated'
+            });
+            
+            logDBOperation('findOrCreateByPowensId', 'transactions', { transactionId: result.rows[0].id, action: 'updated' });
+            return result.rows[0];
+          } else {
+            logger.info('✅ EXISTING TRANSACTION UP TO DATE', {
+              powensTransactionId: transactionData.powens_transaction_id,
+              transactionId: existingTx.id,
+              action: 'no_update_needed'
+            });
+            
+            logDBOperation('findOrCreateByPowensId', 'transactions', { transactionId: existingTx.id, action: 'no_update_needed' });
+            return existingTx;
+          }
+        } else {
+          // Create new transaction
+          logger.info('🆕 CREATING NEW TRANSACTION', {
+            powensTransactionId: transactionData.powens_transaction_id,
+            amount: transactionData.amount,
+            accountId: transactionData.account_id,
+            description: transactionData.description?.substring(0, 50) + '...'
+          });
+
+          const result = await client.query(`
+            INSERT INTO transactions (
+              user_id, account_id, powens_transaction_id, transaction_date, processed_date,
+              amount, currency, description, transaction_type, category, subcategory,
+              merchant_name, merchant_category, reference_number, balance_after,
+              is_pending, powens_metadata
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            RETURNING *
+          `, [
+            transactionData.user_id, 
+            transactionData.account_id, 
+            transactionData.powens_transaction_id, 
+            transactionData.transaction_date, 
+            transactionData.processed_date,
+            transactionData.amount, 
+            transactionData.currency || 'EUR', 
+            transactionData.description, 
+            transactionData.transaction_type, 
+            transactionData.category, 
+            transactionData.subcategory,
+            transactionData.merchant_name, 
+            transactionData.merchant_category, 
+            transactionData.reference_number, 
+            transactionData.balance_after,
+            transactionData.is_pending || false, 
+            JSON.stringify(transactionData.powens_metadata || {})
+          ]);
+          
+          logger.info('✅ TRANSACTION CREATED SUCCESSFULLY', {
+            powensTransactionId: transactionData.powens_transaction_id,
+            newTransactionId: result.rows[0].id,
+            amount: result.rows[0].amount
+          });
+          
+          logDBOperation('findOrCreateByPowensId', 'transactions', { transactionId: result.rows[0].id, action: 'created' });
+          return result.rows[0];
+        }
+      });
     } catch (error) {
+      // Enhanced error logging for debugging
       logger.error('❌ FIND/CREATE TRANSACTION FAILED', {
         powensTransactionId: transactionData.powens_transaction_id,
         accountId: transactionData.account_id,
+        userId: transactionData.user_id,
         error: error.message,
-        stack: error.stack,
         errorCode: error.code,
         errorDetail: error.detail,
         constraint: error.constraint,
-        inputData: transactionData
+        severity: error.severity,
+        sqlState: error.code,
+        transactionAmount: transactionData.amount,
+        transactionDate: transactionData.transaction_date
       });
-      logDBOperation('findOrCreateByPowensId', 'transactions', { powensTransactionId: transactionData.powens_transaction_id }, error);
+      
+      logDBOperation('findOrCreateByPowensId', 'transactions', { 
+        powensTransactionId: transactionData.powens_transaction_id,
+        error: error.message,
+        errorCode: error.code 
+      }, error);
+      
       throw error;
     }
   }

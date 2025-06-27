@@ -178,86 +178,129 @@ class PowensSyncService {
         }
       );
 
-      // Process each transaction with enhanced logging
+      // Process each transaction with enhanced logging and tracking
+      let processedTransactions = 0;
+      let skippedTransactions = 0;
+      let failedTransactions = 0;
+      let updatedTransactions = 0;
+      let createdTransactions = 0;
+      const transactionErrors = [];
+
       for (const powensTransaction of powensTransactions) {
+        let transactionData = null;
         try {
+          processedTransactions++;
           logger.info('🔄 PROCESSING TRANSACTION', {
             powensTransactionId: powensTransaction.id,
             transactionValue: powensTransaction.value,
             transactionDate: powensTransaction.date,
-            transactionWording: powensTransaction.wording,
-            accountId: powensTransaction.id_account,
-            allTransactionFields: Object.keys(powensTransaction)
+            progress: `${processedTransactions}/${powensTransactions.length}`
           });
 
           // Find the corresponding account
           const account = await BankAccountModel.findByPowensId(powensTransaction.id_account);
           
           if (!account) {
+            skippedTransactions++;
             logger.error('❌ ACCOUNT NOT FOUND FOR TRANSACTION', {
               powensTransactionId: powensTransaction.id,
               powensAccountId: powensTransaction.id_account,
-              transactionValue: powensTransaction.value
+              transactionValue: powensTransaction.value,
+              skipReason: 'ACCOUNT_NOT_FOUND'
             });
             continue;
           }
 
-          logger.info('✅ FOUND ACCOUNT FOR TRANSACTION', {
-            powensTransactionId: powensTransaction.id,
-            powensAccountId: powensTransaction.id_account,
-            foundAccountId: account.id,
-            foundAccountName: account.account_name
-          });
-
-          const transactionData = this.dataService.mapPowensTransactionToLocal(
+          transactionData = this.dataService.mapPowensTransactionToLocal(
             powensTransaction, 
             userId, 
             account.id
           );
           
-          logger.info('📊 MAPPED TRANSACTION DATA', {
-            powensTransactionId: powensTransaction.id,
-            mappedData: transactionData,
-            mappedFields: Object.keys(transactionData)
-          });
+          const result = await TransactionModel.findOrCreateByPowensId(transactionData);
           
-          await TransactionModel.findOrCreateByPowensId(transactionData);
-          
-          logger.info('✅ TRANSACTION SAVED SUCCESSFULLY', {
-            powensTransactionId: powensTransaction.id,
-            transactionValue: powensTransaction.value,
-            accountId: account.id
-          });
+          // Track what actually happened
+          if (result && result.created_at) {
+            // Check if this is a newly created transaction vs updated
+            const isNew = new Date(result.created_at).getTime() > (Date.now() - 5000); // Created in last 5 seconds
+            if (isNew) {
+              createdTransactions++;
+              logger.info('✅ NEW TRANSACTION CREATED', {
+                powensTransactionId: powensTransaction.id,
+                transactionId: result.id,
+                amount: result.amount
+              });
+            } else {
+              updatedTransactions++;
+              logger.info('✅ EXISTING TRANSACTION UPDATED', {
+                powensTransactionId: powensTransaction.id,
+                transactionId: result.id,
+                amount: result.amount
+              });
+            }
+          }
           
           syncedTransactions++;
         } catch (transactionError) {
-          logger.error('❌ TRANSACTION SYNC FAILED - DETAILED ERROR', {
+          failedTransactions++;
+          const errorInfo = {
             powensTransactionId: powensTransaction.id,
             accountId: powensTransaction.id_account,
             error: transactionError.message,
-            stack: transactionError.stack,
-            errorName: transactionError.name,
-            sqlState: transactionError.code,
+            errorCode: transactionError.code,
             constraint: transactionError.constraint,
-            detail: transactionError.detail,
-            rawPowensData: powensTransaction,
-            mappedData: transactionData || 'MAPPING_FAILED'
-          });
+            transactionValue: powensTransaction.value,
+            transactionDate: powensTransaction.date
+          };
+          
+          transactionErrors.push(errorInfo);
+          
+          logger.error('❌ TRANSACTION SYNC FAILED', errorInfo);
           // Continue with other transactions
         }
       }
 
-      // Update sync status
-      await BankConnectionModel.updateSyncStatus(connectionId, 'success');
+      // Calculate final statistics
+      const totalTransactions = powensTransactions.length;
+      const successRate = ((syncedTransactions / totalTransactions) * 100).toFixed(1);
+      const syncStatus = failedTransactions === 0 ? 'success' : 
+                        failedTransactions < totalTransactions / 2 ? 'partial_success' : 'failed';
 
-      logger.info('✅ Connection sync completed', { 
+      // Update sync status with detailed info
+      const syncMessage = failedTransactions > 0 ? 
+        `${failedTransactions} transactions failed out of ${totalTransactions}` : null;
+      
+      await BankConnectionModel.updateSyncStatus(connectionId, syncStatus, syncMessage);
+
+      logger.info('✅ Connection sync completed with detailed statistics', { 
         userId, 
         connectionId, 
-        syncedAccounts, 
-        syncedTransactions 
+        syncedAccounts,
+        totalTransactions,
+        processedTransactions,
+        syncedTransactions,
+        createdTransactions,
+        updatedTransactions,
+        skippedTransactions,
+        failedTransactions,
+        successRate: `${successRate}%`,
+        syncStatus,
+        hasErrors: failedTransactions > 0,
+        errorSummary: transactionErrors.slice(0, 5) // Log first 5 errors
       });
 
-      return { syncedAccounts, syncedTransactions };
+      return { 
+        syncedAccounts, 
+        syncedTransactions,
+        totalTransactions,
+        createdTransactions,
+        updatedTransactions,
+        failedTransactions,
+        skippedTransactions,
+        successRate: parseFloat(successRate),
+        syncStatus,
+        errors: transactionErrors
+      };
     } catch (error) {
       // Update sync status with error
       await BankConnectionModel.updateSyncStatus(connectionId, 'failed', error.message);

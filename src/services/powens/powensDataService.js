@@ -445,22 +445,83 @@ class PowensDataService {
    * Map Powens transaction data to local format (updated for correct API response)
    */
   mapPowensTransactionToLocal(powensTransaction, userId, accountId) {
-    return {
+    // Validate required fields
+    if (!powensTransaction.id) {
+      throw new Error('Transaction missing required field: id');
+    }
+    if (!userId) {
+      throw new Error('Transaction mapping missing required field: userId');
+    }
+    if (!accountId) {
+      throw new Error('Transaction mapping missing required field: accountId');
+    }
+    if (!powensTransaction.date) {
+      throw new Error('Transaction missing required field: date');
+    }
+
+    // Validate and parse amount
+    const rawValue = powensTransaction.value;
+    if (rawValue === null || rawValue === undefined) {
+      logger.warn('Transaction has null/undefined value', { 
+        transactionId: powensTransaction.id,
+        rawValue 
+      });
+    }
+    
+    const amount = parseFloat(rawValue || 0);
+    if (isNaN(amount)) {
+      logger.error('Transaction has invalid amount', { 
+        transactionId: powensTransaction.id,
+        rawValue,
+        parsedAmount: amount
+      });
+      throw new Error(`Invalid transaction amount: ${rawValue}`);
+    }
+
+    // Validate and format date
+    const transactionDate = new Date(powensTransaction.date);
+    if (isNaN(transactionDate.getTime())) {
+      throw new Error(`Invalid transaction date: ${powensTransaction.date}`);
+    }
+
+    // Build description with fallbacks
+    const description = powensTransaction.wording || 
+                      powensTransaction.original_wording || 
+                      powensTransaction.simplified_wording || 
+                      `Transaction ${powensTransaction.id}`;
+
+    // Ensure description isn't too long for database
+    const finalDescription = description.length > 500 ? 
+                            description.substring(0, 497) + '...' : 
+                            description;
+
+    const mappedData = {
       user_id: userId,
       account_id: accountId,
-      powens_transaction_id: powensTransaction.id,
+      powens_transaction_id: powensTransaction.id.toString(),
       transaction_date: powensTransaction.date,
       processed_date: powensTransaction.vdate || powensTransaction.date,
-      amount: parseFloat(powensTransaction.value || 0),
+      amount: amount,
       currency: powensTransaction.original_currency || 'EUR',
-      description: powensTransaction.wording || powensTransaction.original_wording || powensTransaction.simplified_wording,
-      transaction_type: parseFloat(powensTransaction.value || 0) >= 0 ? 'credit' : 'debit',
+      description: finalDescription,
+      transaction_type: amount >= 0 ? 'credit' : 'debit',
       category: this.categorizeTransaction(powensTransaction),
-      merchant_name: powensTransaction.simplified_wording || powensTransaction.wording,
+      merchant_name: (powensTransaction.simplified_wording || powensTransaction.wording || '').substring(0, 255),
       reference_number: powensTransaction.id.toString(),
-      is_pending: powensTransaction.coming || false,
+      is_pending: Boolean(powensTransaction.coming),
       powens_metadata: powensTransaction
     };
+
+    // Log validation success for debugging
+    logger.debug('✅ Transaction mapped successfully', {
+      powensTransactionId: powensTransaction.id,
+      amount: mappedData.amount,
+      description: mappedData.description.substring(0, 50) + '...',
+      currency: mappedData.currency,
+      isPending: mappedData.is_pending
+    });
+
+    return mappedData;
   }
 
   /**

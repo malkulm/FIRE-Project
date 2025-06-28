@@ -242,6 +242,7 @@ class PowensDataService {
   /**
    * Get transactions for a user (using correct API endpoint)
    * Based on Powens API documentation: GET /users/{userId}/transactions
+   * Enhanced to support incremental sync via last_update parameter
    */
   async getUserTransactions(accessToken, options = {}) {
     try {
@@ -249,6 +250,8 @@ class PowensDataService {
         limit = 500,
         minDate = null,
         maxDate = null,
+        lastUpdate = null,
+        includeDeleted = true,
         userId = null
       } = options;
 
@@ -257,11 +260,26 @@ class PowensDataService {
         limit: limit.toString()
       });
 
+      // Incremental sync support: last_update parameter for efficient sync
+      if (lastUpdate) {
+        params.append('last_update', lastUpdate);
+        logger.info('🔄 INCREMENTAL SYNC: Using last_update parameter', { 
+          lastUpdate,
+          userId 
+        });
+      }
+
+      // Date range filters (used for initial sync or reconciliation)
       if (minDate) {
         params.append('min_date', minDate);
       }
       if (maxDate) {
         params.append('max_date', maxDate);
+      }
+
+      // Include deleted transactions for complete sync
+      if (includeDeleted) {
+        params.append('all', '');
       }
 
       // Determine user endpoint
@@ -279,14 +297,19 @@ class PowensDataService {
 
       const requestUrl = `${this.apiUrl}/users/${powensUserId}/transactions?${params}`;
       
-      logger.info('🔍 DEBUGGING: Getting user transactions', {
+      const syncType = lastUpdate ? 'INCREMENTAL' : (minDate ? 'DATE_RANGE' : 'FULL');
+      logger.info(`🔍 FETCHING TRANSACTIONS (${syncType})`, {
         apiUrl: this.apiUrl,
         endpoint: `/users/${powensUserId}/transactions`,
         requestUrl,
         tokenPreview: accessToken ? accessToken.substring(0, 15) + '...' : 'none',
         powensUserId,
         userId,
-        options
+        syncType,
+        lastUpdate,
+        dateRange: { minDate, maxDate },
+        includeDeleted,
+        limit
       });
 
       const response = await axios.get(requestUrl, {
@@ -443,6 +466,7 @@ class PowensDataService {
 
   /**
    * Map Powens transaction data to local format (updated for correct API response)
+   * Enhanced to handle transaction state and last_update timestamp
    */
   mapPowensTransactionToLocal(powensTransaction, userId, accountId) {
     // Validate required fields
@@ -495,6 +519,11 @@ class PowensDataService {
                             description.substring(0, 497) + '...' : 
                             description;
 
+    // Extract transaction state information
+    const isDeleted = Boolean(powensTransaction.deleted);
+    const isActive = powensTransaction.active !== false; // Default to true if not specified
+    const powensLastUpdate = powensTransaction.last_update ? new Date(powensTransaction.last_update) : null;
+
     const mappedData = {
       user_id: userId,
       account_id: accountId,
@@ -509,6 +538,9 @@ class PowensDataService {
       merchant_name: (powensTransaction.simplified_wording || powensTransaction.wording || '').substring(0, 255),
       reference_number: powensTransaction.id.toString(),
       is_pending: Boolean(powensTransaction.coming),
+      is_deleted: isDeleted,
+      is_active: isActive,
+      powens_last_update: powensLastUpdate,
       powens_metadata: powensTransaction
     };
 
@@ -518,7 +550,10 @@ class PowensDataService {
       amount: mappedData.amount,
       description: mappedData.description.substring(0, 50) + '...',
       currency: mappedData.currency,
-      isPending: mappedData.is_pending
+      isPending: mappedData.is_pending,
+      isDeleted: mappedData.is_deleted,
+      isActive: mappedData.is_active,
+      lastUpdate: mappedData.powens_last_update
     });
 
     return mappedData;

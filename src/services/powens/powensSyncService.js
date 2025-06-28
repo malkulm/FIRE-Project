@@ -169,50 +169,54 @@ class PowensSyncService {
         }
       }
 
-      // Get transactions from Powens API - expand date range to get more historical data
-      // Check if we have any transactions to determine date range
+      // PHASE 1: Intelligent Incremental Sync using last_update parameter
+      const { fullHistorySync = false } = options;
+      const lastSyncTimestamp = await BankConnectionModel.getLastSyncTimestamp(connectionId);
       const existingTransactionCount = await TransactionModel.countByConnectionId(connectionId);
       
-      let minDate = null;
-      const { fullHistorySync = false } = options;
+      let transactionOptions = { 
+        limit: 2000,
+        userId,
+        includeDeleted: true // Always include deleted transactions for complete sync
+      };
       
+      // Determine sync strategy
       if (fullHistorySync) {
-        // Full history sync - no date filter to get all available transactions
-        minDate = null;
+        // Full history sync - no filters, get everything
         logger.info('🔄 FULL HISTORY SYNC: Fetching ALL available transactions', { 
           connectionId,
           existingCount: existingTransactionCount
         });
+      } else if (lastSyncTimestamp) {
+        // INCREMENTAL SYNC: Use last_update parameter for efficiency
+        transactionOptions.lastUpdate = lastSyncTimestamp;
+        logger.info('🔄 INCREMENTAL SYNC: Using last_update parameter', { 
+          connectionId,
+          lastSyncTimestamp,
+          existingCount: existingTransactionCount,
+          strategy: 'efficient_incremental'
+        });
       } else if (existingTransactionCount === 0) {
-        // First sync - get up to 1 year of historical data
+        // First sync - get 1 year of historical data
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        minDate = oneYearAgo.toISOString().split('T')[0];
+        transactionOptions.minDate = oneYearAgo.toISOString().split('T')[0];
         logger.info('🔄 FIRST SYNC: Fetching 1 year of historical transactions', { 
-          fromDate: minDate, 
-          connectionId 
+          fromDate: transactionOptions.minDate,
+          connectionId,
+          strategy: 'initial_historical'
         });
       } else {
-        // Regular sync - get last 90 days
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-        minDate = ninetyDaysAgo.toISOString().split('T')[0];
-        logger.info('🔄 REGULAR SYNC: Fetching last 90 days of transactions', { 
-          fromDate: minDate, 
+        // Fallback: Regular sync with date range (should rarely happen)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        transactionOptions.minDate = thirtyDaysAgo.toISOString().split('T')[0];
+        logger.warn('🔄 FALLBACK SYNC: Using 30-day date range (missing last_sync_timestamp)', { 
+          fromDate: transactionOptions.minDate,
+          connectionId,
           existingCount: existingTransactionCount,
-          connectionId 
+          strategy: 'fallback_date_range'
         });
-      }
-      
-      // Build transaction query options
-      const transactionOptions = { 
-        limit: 2000, // Increased limit for historical data
-        userId
-      };
-      
-      // Only add minDate if it's defined (null for full history sync)
-      if (minDate !== null) {
-        transactionOptions.minDate = minDate;
       }
       
       const powensTransactions = await this.dataService.getUserTransactions(
@@ -313,6 +317,25 @@ class PowensSyncService {
         `${failedTransactions} transactions failed out of ${totalTransactions}` : null;
       
       await BankConnectionModel.updateSyncStatus(connectionId, syncStatus, syncMessage);
+
+      // PHASE 1: Update last_sync_timestamp for efficient incremental sync
+      // Only update timestamp if sync was successful or partially successful
+      if (syncStatus === 'success' || syncStatus === 'partial_success') {
+        const currentTimestamp = new Date().toISOString();
+        await BankConnectionModel.updateLastSyncTimestamp(connectionId, currentTimestamp);
+        
+        logger.info('✅ Updated last_sync_timestamp for incremental sync', {
+          connectionId,
+          timestamp: currentTimestamp,
+          strategy: lastSyncTimestamp ? 'incremental' : 'initial'
+        });
+      } else {
+        logger.warn('⚠️ Skipping timestamp update due to sync failure', {
+          connectionId,
+          syncStatus,
+          keepingTimestamp: lastSyncTimestamp
+        });
+      }
 
       logger.info('✅ Connection sync completed with detailed statistics', { 
         userId, 

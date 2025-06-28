@@ -29,11 +29,19 @@ npm run seed
 - Health Check: http://localhost:3000/health
 - API Documentation: http://localhost:3000/api/docs (if enabled)
 
-### Key API Endpoints for Transaction Sync
+### Key API Endpoints for Transaction Sync (Phase 1 Implementation)
+- **Incremental Sync**: `POST /api/sync/incremental-default` - Efficient sync using Powens `last_update` parameter
 - **Full History Sync**: `POST /api/sync/full-history-default` - Fetches ALL available transaction history (no date filters)
-- **Regular Sync**: `POST /api/sync/user-default` - Fetches recent transactions (90 days)
+- **Regular Sync**: `POST /api/sync/user-default` - Standard sync with date range fallback
 - **Debug Transactions**: `GET /api/sync/debug/transactions` - Check current transaction count in database
 - **Test Token**: `POST /api/sync/debug/test-token` - Verify Powens API connectivity
+
+### Phase 1 Sync Strategy (Production-Ready)
+- **First Sync**: Fetches 1 year of historical data
+- **Incremental Sync**: Uses Powens `last_update` parameter for efficiency (only changed transactions)
+- **Conflict Resolution**: Timestamp-based updates prevent data corruption
+- **Transaction States**: Handles deleted/inactive transactions from Powens API
+- **Watermark Management**: Tracks `last_sync_timestamp` per connection for reliable sync
 
 ## Architecture Overview
 

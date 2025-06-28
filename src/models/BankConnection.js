@@ -244,6 +244,49 @@ class BankConnectionModel {
     }
   }
 
+  // Update last sync timestamp for incremental sync
+  static async updateLastSyncTimestamp(connectionId, timestamp = null) {
+    try {
+      const syncTimestamp = timestamp || new Date().toISOString();
+      
+      const result = await database.query(`
+        UPDATE bank_connections 
+        SET last_sync_timestamp = $1, last_sync_at = NOW()
+        WHERE id = $2
+        RETURNING *
+      `, [syncTimestamp, connectionId]);
+
+      logDBOperation('updateLastSyncTimestamp', 'bank_connections', { 
+        connectionId, 
+        timestamp: syncTimestamp 
+      });
+      return result.rows[0];
+    } catch (error) {
+      logDBOperation('updateLastSyncTimestamp', 'bank_connections', { connectionId }, error);
+      throw error;
+    }
+  }
+
+  // Get last sync timestamp for incremental sync
+  static async getLastSyncTimestamp(connectionId) {
+    try {
+      const result = await database.query(`
+        SELECT last_sync_timestamp FROM bank_connections WHERE id = $1
+      `, [connectionId]);
+
+      const timestamp = result.rows[0]?.last_sync_timestamp;
+      logDBOperation('getLastSyncTimestamp', 'bank_connections', { 
+        connectionId, 
+        hasTimestamp: !!timestamp 
+      });
+      
+      return timestamp;
+    } catch (error) {
+      logDBOperation('getLastSyncTimestamp', 'bank_connections', { connectionId }, error);
+      throw error;
+    }
+  }
+
   // Get active connections for sync
   static async getActiveConnections() {
     try {

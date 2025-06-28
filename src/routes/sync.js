@@ -757,6 +757,109 @@ router.post('/full-history/:connectionId', async (req, res, next) => {
 });
 
 /**
+ * @route POST /api/sync/incremental-default
+ * @desc Trigger incremental sync for default user using last_update parameter
+ * @access Public
+ */
+router.post('/incremental-default', async (req, res, next) => {
+  try {
+    const { force = false } = req.body;
+    
+    // Use the default admin user UUID from the migration
+    const userId = '00000000-0000-0000-0000-000000000001';
+
+    logger.info('Incremental sync for default user requested', { userId, force });
+
+    // Get all connections for the user
+    const connections = await BankConnectionModel.findByUserId(userId);
+    
+    if (connections.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'NO_CONNECTIONS_FOUND',
+          message: 'No connections found for user',
+          details: 'Please establish a bank connection first'
+        }
+      });
+    }
+
+    // Import the Powens sync service for direct access
+    const powensSyncService = require('../services/powens/powensSyncService');
+    
+    let results = [];
+    
+    // Trigger incremental sync for each connection (default behavior with last_update)
+    for (const connection of connections) {
+      try {
+        const lastSyncTimestamp = await BankConnectionModel.getLastSyncTimestamp(connection.id);
+        
+        logger.info('Starting incremental sync for connection', {
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          lastSyncTimestamp,
+          strategy: lastSyncTimestamp ? 'incremental' : 'initial'
+        });
+        
+        const result = await powensSyncService.syncConnectionData(
+          userId, 
+          connection.id, 
+          { fullHistorySync: false } // Use incremental sync logic
+        );
+        
+        results.push({
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          lastSyncTimestamp,
+          strategy: lastSyncTimestamp ? 'incremental' : 'initial',
+          status: 'success',
+          result
+        });
+        
+      } catch (error) {
+        logger.error('Incremental sync failed for connection', {
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          error: error.message
+        });
+        
+        results.push({
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'failed').length;
+
+    res.json({
+      success: true,
+      message: `Incremental sync completed for ${results.length} connections using last_update parameter`,
+      data: {
+        userId,
+        syncType: 'INCREMENTAL_SYNC_PHASE1',
+        note: 'This sync uses Powens last_update parameter for efficient incremental synchronization',
+        results,
+        summary: {
+          total: results.length,
+          successful: successCount,
+          failed: errorCount,
+          successRate: results.length > 0 ? ((successCount / results.length) * 100).toFixed(1) + '%' : '0%'
+        },
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Incremental sync for default user failed', { error: error.message });
+    next(error);
+  }
+});
+
+/**
  * @route POST /api/sync/accounts-only/:connectionId
  * @desc Sync only accounts (no transactions) for a connection
  * @access Public

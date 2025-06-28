@@ -22,6 +22,9 @@ class TransactionModel {
         reference_number,
         balance_after,
         is_pending,
+        is_deleted,
+        is_active,
+        powens_last_update,
         powens_metadata
       } = transactionData;
 
@@ -30,15 +33,16 @@ class TransactionModel {
           user_id, account_id, powens_transaction_id, transaction_date, processed_date,
           amount, currency, description, transaction_type, category, subcategory,
           merchant_name, merchant_category, reference_number, balance_after,
-          is_pending, powens_metadata
+          is_pending, is_deleted, is_active, powens_last_update, powens_metadata
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         RETURNING *
       `, [
         user_id, account_id, powens_transaction_id, transaction_date, processed_date,
         amount, currency || 'EUR', description, transaction_type, category, subcategory,
         merchant_name, merchant_category, reference_number, balance_after,
-        is_pending || false, JSON.stringify(powens_metadata || {})
+        is_pending || false, is_deleted || false, is_active !== false, 
+        powens_last_update, JSON.stringify(powens_metadata || {})
       ]);
 
       logDBOperation('create', 'transactions', { transactionId: result.rows[0].id, amount });
@@ -277,44 +281,64 @@ class TransactionModel {
             newAmount: transactionData.amount
           });
 
-          // Check if update is needed
+          // Check if update is needed using timestamp comparison for conflict resolution
           const existingTx = existing.rows[0];
-          const needsUpdate = 
-            existingTx.is_pending !== (transactionData.is_pending || false) ||
-            existingTx.balance_after !== transactionData.balance_after ||
-            existingTx.amount !== transactionData.amount ||
-            existingTx.description !== transactionData.description;
+          const newLastUpdate = transactionData.powens_last_update;
+          const existingLastUpdate = existingTx.powens_last_update;
+          
+          // Only update if the new data is newer OR if we don't have a timestamp
+          const shouldUpdate = !existingLastUpdate || 
+                              (newLastUpdate && new Date(newLastUpdate) > new Date(existingLastUpdate)) ||
+                              existingTx.is_pending !== (transactionData.is_pending || false) ||
+                              existingTx.is_deleted !== (transactionData.is_deleted || false) ||
+                              existingTx.is_active !== (transactionData.is_active !== false) ||
+                              existingTx.balance_after !== transactionData.balance_after ||
+                              existingTx.amount !== transactionData.amount ||
+                              existingTx.description !== transactionData.description;
 
-          if (needsUpdate) {
+          if (shouldUpdate) {
             logger.info('🔄 UPDATING EXISTING TRANSACTION', {
               powensTransactionId: transactionData.powens_transaction_id,
+              timestampComparison: {
+                existing: existingLastUpdate,
+                new: newLastUpdate,
+                isNewer: newLastUpdate && existingLastUpdate ? new Date(newLastUpdate) > new Date(existingLastUpdate) : 'no_timestamp'
+              },
               changes: {
                 is_pending: { old: existingTx.is_pending, new: transactionData.is_pending || false },
+                is_deleted: { old: existingTx.is_deleted, new: transactionData.is_deleted || false },
+                is_active: { old: existingTx.is_active, new: transactionData.is_active !== false },
                 balance_after: { old: existingTx.balance_after, new: transactionData.balance_after },
                 amount: { old: existingTx.amount, new: transactionData.amount }
               }
             });
 
-            // Update the transaction with proper handling
+            // Update the transaction with proper handling including new state fields
             const result = await client.query(`
               UPDATE transactions SET 
                 is_pending = $1,
-                balance_after = $2,
-                amount = $3,
-                description = $4,
-                transaction_date = $5,
-                processed_date = $6,
-                powens_metadata = $7,
+                is_deleted = $2,
+                is_active = $3,
+                balance_after = $4,
+                amount = $5,
+                description = $6,
+                transaction_date = $7,
+                processed_date = $8,
+                powens_last_update = $9,
+                powens_metadata = $10,
                 updated_at = NOW()
-              WHERE id = $8
+              WHERE id = $11
               RETURNING *
             `, [
               transactionData.is_pending || false,
+              transactionData.is_deleted || false,
+              transactionData.is_active !== false,
               transactionData.balance_after,
               transactionData.amount,
               transactionData.description,
               transactionData.transaction_date,
               transactionData.processed_date,
+              transactionData.powens_last_update,
               JSON.stringify(transactionData.powens_metadata || {}),
               existingTx.id
             ]);
@@ -351,9 +375,9 @@ class TransactionModel {
               user_id, account_id, powens_transaction_id, transaction_date, processed_date,
               amount, currency, description, transaction_type, category, subcategory,
               merchant_name, merchant_category, reference_number, balance_after,
-              is_pending, powens_metadata
+              is_pending, is_deleted, is_active, powens_last_update, powens_metadata
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
             RETURNING *
           `, [
             transactionData.user_id, 
@@ -371,7 +395,10 @@ class TransactionModel {
             transactionData.merchant_category, 
             transactionData.reference_number, 
             transactionData.balance_after,
-            transactionData.is_pending || false, 
+            transactionData.is_pending || false,
+            transactionData.is_deleted || false,
+            transactionData.is_active !== false,
+            transactionData.powens_last_update,
             JSON.stringify(transactionData.powens_metadata || {})
           ]);
           

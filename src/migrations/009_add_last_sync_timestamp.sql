@@ -34,6 +34,7 @@ IS 'False if transaction is ignored by PFM services (Powens active field)';
 COMMENT ON COLUMN transactions.powens_last_update 
 IS 'Timestamp when transaction was last updated at Powens (from last_update field)';
 
--- Migration completed
-INSERT INTO migration_log (version, description, applied_at) 
-VALUES (9, 'Add last_sync_timestamp for incremental sync and transaction state tracking', NOW());
+-- Migration 009 completed successfully
+-- Added: last_sync_timestamp to bank_connections for incremental sync
+-- Added: transaction state tracking fields (is_deleted, is_active, powens_last_update)
+-- Added: appropriate indexes for performance

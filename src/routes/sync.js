@@ -514,6 +514,103 @@ router.post('/user/:userId', async (req, res, next) => {
 });
 
 /**
+ * @route POST /api/sync/full-history-default
+ * @desc Trigger full history sync for the default admin user (all connections)
+ * @access Public
+ */
+router.post('/full-history-default', async (req, res, next) => {
+  try {
+    const { force = false } = req.body;
+    
+    // Use the default admin user UUID from the migration
+    const userId = '00000000-0000-0000-0000-000000000001';
+
+    logger.info('Full history sync for default user requested', { userId, force });
+
+    // Get all connections for the user
+    const connections = await BankConnectionModel.findByUserId(userId);
+    
+    if (connections.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'NO_CONNECTIONS_FOUND',
+          message: 'No connections found for user',
+          details: 'Please establish a bank connection first'
+        }
+      });
+    }
+
+    // Import the Powens sync service for direct access
+    const powensSyncService = require('../services/powens/powensSyncService');
+    
+    let results = [];
+    
+    // Trigger full history sync for each connection
+    for (const connection of connections) {
+      try {
+        logger.info('Starting full history sync for connection', {
+          connectionId: connection.id,
+          bankName: connection.bank_name
+        });
+        
+        const result = await powensSyncService.syncConnectionData(
+          userId, 
+          connection.id, 
+          { fullHistorySync: true }
+        );
+        
+        results.push({
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          status: 'success',
+          result
+        });
+        
+      } catch (error) {
+        logger.error('Full history sync failed for connection', {
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          error: error.message
+        });
+        
+        results.push({
+          connectionId: connection.id,
+          bankName: connection.bank_name,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.status === 'success').length;
+    const errorCount = results.filter(r => r.status === 'failed').length;
+
+    res.json({
+      success: true,
+      message: `Full history sync completed for ${results.length} connections - fetched ALL available transactions`,
+      data: {
+        userId,
+        syncType: 'FULL_HISTORY_SYNC',
+        note: 'This sync fetched all available transaction history without date filters from Powens API',
+        results,
+        summary: {
+          total: results.length,
+          successful: successCount,
+          failed: errorCount,
+          successRate: results.length > 0 ? ((successCount / results.length) * 100).toFixed(1) + '%' : '0%'
+        },
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Full history sync for default user failed', { error: error.message });
+    next(error);
+  }
+});
+
+/**
  * @route POST /api/sync/user-default
  * @desc Manually trigger sync for the default admin user
  * @access Public
@@ -597,6 +694,64 @@ router.get('/stats', async (req, res, next) => {
 
   } catch (error) {
     logger.error('Failed to get sync stats', { error: error.message });
+    next(error);
+  }
+});
+
+/**
+ * @route POST /api/sync/full-history/:connectionId
+ * @desc Sync all available transaction history for a connection (no date filter)
+ * @access Public
+ */
+router.post('/full-history/:connectionId', async (req, res, next) => {
+  try {
+    const { connectionId } = req.params;
+    const { force = false } = req.body;
+
+    logger.info('Full history sync requested', { connectionId, force });
+
+    // Validate connection exists
+    const connection = await BankConnectionModel.findById(connectionId);
+    if (!connection) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'CONNECTION_NOT_FOUND',
+          message: 'Connection not found',
+          details: `Connection with ID ${connectionId} does not exist`
+        }
+      });
+    }
+
+    // Import the Powens sync service for direct access
+    const powensSyncService = require('../services/powens/powensSyncService');
+    
+    // Trigger sync with full history option
+    const result = await powensSyncService.syncConnectionData(
+      connection.user_id, 
+      connectionId, 
+      { fullHistorySync: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Full history sync completed - fetched ALL available transactions from Powens',
+      data: {
+        connectionId,
+        userId: connection.user_id,
+        bankName: connection.bank_name,
+        syncResults: result,
+        note: 'This sync fetched all available transaction history without date filters',
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Full history sync failed', { 
+      connectionId: req.params.connectionId,
+      error: error.message,
+      stack: error.stack
+    });
     next(error);
   }
 });

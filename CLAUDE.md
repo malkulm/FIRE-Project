@@ -29,6 +29,12 @@ npm run seed
 - Health Check: http://localhost:3000/health
 - API Documentation: http://localhost:3000/api/docs (if enabled)
 
+### Key API Endpoints for Transaction Sync
+- **Full History Sync**: `POST /api/sync/full-history-default` - Fetches ALL available transaction history (no date filters)
+- **Regular Sync**: `POST /api/sync/user-default` - Fetches recent transactions (90 days)
+- **Debug Transactions**: `GET /api/sync/debug/transactions` - Check current transaction count in database
+- **Test Token**: `POST /api/sync/debug/test-token` - Verify Powens API connectivity
+
 ## Architecture Overview
 
 ### High-Level Structure

@@ -77,8 +77,12 @@ class PowensSyncService {
 
   /**
    * Sync all data for a user's connection using correct API endpoints
+   * @param {string} userId - User ID
+   * @param {string} connectionId - Connection ID
+   * @param {Object} options - Sync options
+   * @param {boolean} options.fullHistorySync - If true, fetch all available transaction history
    */
-  async syncConnectionData(userId, connectionId) {
+  async syncConnectionData(userId, connectionId, options = {}) {
     try {
       logger.info('🔄 Starting connection data sync', { userId, connectionId });
 
@@ -165,17 +169,55 @@ class PowensSyncService {
         }
       }
 
-      // Get transactions from Powens API (last 90 days)
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      // Get transactions from Powens API - expand date range to get more historical data
+      // Check if we have any transactions to determine date range
+      const existingTransactionCount = await TransactionModel.countByConnectionId(connectionId);
+      
+      let minDate = null;
+      const { fullHistorySync = false } = options;
+      
+      if (fullHistorySync) {
+        // Full history sync - no date filter to get all available transactions
+        minDate = null;
+        logger.info('🔄 FULL HISTORY SYNC: Fetching ALL available transactions', { 
+          connectionId,
+          existingCount: existingTransactionCount
+        });
+      } else if (existingTransactionCount === 0) {
+        // First sync - get up to 1 year of historical data
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        minDate = oneYearAgo.toISOString().split('T')[0];
+        logger.info('🔄 FIRST SYNC: Fetching 1 year of historical transactions', { 
+          fromDate: minDate, 
+          connectionId 
+        });
+      } else {
+        // Regular sync - get last 90 days
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        minDate = ninetyDaysAgo.toISOString().split('T')[0];
+        logger.info('🔄 REGULAR SYNC: Fetching last 90 days of transactions', { 
+          fromDate: minDate, 
+          existingCount: existingTransactionCount,
+          connectionId 
+        });
+      }
+      
+      // Build transaction query options
+      const transactionOptions = { 
+        limit: 2000, // Increased limit for historical data
+        userId
+      };
+      
+      // Only add minDate if it's defined (null for full history sync)
+      if (minDate !== null) {
+        transactionOptions.minDate = minDate;
+      }
       
       const powensTransactions = await this.dataService.getUserTransactions(
         accessToken,
-        { 
-          limit: 1000,
-          minDate: ninetyDaysAgo.toISOString().split('T')[0],
-          userId
-        }
+        transactionOptions
       );
 
       // Process each transaction with enhanced logging and tracking

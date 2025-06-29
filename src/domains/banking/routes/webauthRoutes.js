@@ -384,9 +384,9 @@ router.get('/callback', async (req, res, next) => {
         timestamp: new Date().toISOString()
       });
     } else {
-      // Redirect to frontend success page
-      const redirectUrl = process.env.FRONTEND_SUCCESS_URL || '/success';
-      res.redirect(`${redirectUrl}?connection_id=${connection_id}&accounts=${savedAccounts}`);
+      // Redirect to frontend with success parameters (matches Clone-FIRE behavior)
+      const redirectUrl = process.env.FRONTEND_SUCCESS_URL || '/';
+      res.redirect(`${redirectUrl}?success=true&connection_id=${connection_id}&accounts=${savedAccounts}`);
     }
 
   } catch (error) {
@@ -404,9 +404,9 @@ router.get('/callback', async (req, res, next) => {
         timestamp: new Date().toISOString()
       });
     } else {
-      // Redirect to frontend error page
-      const errorUrl = process.env.FRONTEND_ERROR_URL || '/error';
-      res.redirect(`${errorUrl}?error=${encodeURIComponent(error.message)}`);
+      // Redirect to frontend with error parameters (matches Clone-FIRE behavior)
+      const errorUrl = process.env.FRONTEND_ERROR_URL || '/';
+      res.redirect(`${errorUrl}?error=true&message=${encodeURIComponent(error.message)}`);
     }
   }
 });

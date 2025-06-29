@@ -1,9 +1,9 @@
 const axios = require('axios');
-const { logger } = require('../../utils/logger');
+const { logger } = require('../../shared/utils/logger');
 const { POWENS_API_URL } = require('./constants');
 
 // Models
-const UserModel = require('../../models/User');
+const UserModel = require('../models/User');
 
 /**
  * Powens Data Collection Service

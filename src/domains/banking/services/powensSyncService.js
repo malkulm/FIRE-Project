@@ -1,14 +1,14 @@
-const { logger } = require('../../utils/logger');
+const { logger } = require('../../shared/utils/logger');
 
 // Import the split services
 const powensAuthService = require('./powensAuthService');
 const powensDataService = require('./powensDataService');
 
 // Models
-const BankConnectionModel = require('../../models/BankConnection');
-const BankAccountModel = require('../../models/BankAccount');
-const TransactionModel = require('../../models/Transaction');
-const UserModel = require('../../models/User');
+const BankConnectionModel = require('../models/BankConnection');
+const BankAccountModel = require('../models/BankAccount');
+const TransactionModel = require('../models/Transaction');
+const UserModel = require('../models/User');
 
 /**
  * Powens Sync Service

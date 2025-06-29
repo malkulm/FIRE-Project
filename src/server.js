@@ -80,8 +80,8 @@ app.get('/debug/routes', (req, res) => {
         const methods = Object.keys(layer.route.methods);
         routes.push({ path, methods });
       } else if (layer.name === 'router' && layer.regexp) {
-        const pathMatch = layer.regexp.source.match(/^\\^\\\\?\\/([^\\\\?$]*)/);
-        const subPath = pathMatch ? pathMatch[1].replace(/\\\\\//g, '/') : '';
+        const pathMatch = layer.regexp.source.match(/^\^\\?\\/([^\\?$]*)/);
+        const subPath = pathMatch ? pathMatch[1].replace(/\\\//g, '/') : '';
         const newBasePath = basePath + '/' + subPath;
         if (layer.handle && layer.handle.stack) {
           extractRoutes(layer.handle.stack, newBasePath);

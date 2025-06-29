@@ -3,6 +3,8 @@ const router = express.Router();
 const { logger } = require('../../shared/utils/logger');
 const powensService = require('../services/powensService');
 
+console.log('🔧 DEBUG: webauthRoutes.js - Starting route definitions...');
+
 // Models
 const BankConnectionModel = require('../models/BankConnection');
 const BankAccountModel = require('../models/BankAccount');
@@ -191,7 +193,9 @@ router.get('/webauth-url', async (req, res, next) => {
  * Generate webauth URL for bank connection - Alternative endpoint name
  * FIXED: Make connector_id optional for frontend compatibility
  */
+console.log('🔧 DEBUG: Defining /url route...');
 router.get('/url', (req, res, next) => {
+  console.log('🔧 DEBUG: /url route called!');
   // Simple test response to verify route registration
   res.json({
     success: true,
@@ -202,6 +206,7 @@ router.get('/url', (req, res, next) => {
     }
   });
 });
+console.log('🔧 DEBUG: /url route defined successfully');
 
 /**
  * 🆕 GET /api/auth/powens/callback
@@ -489,4 +494,5 @@ router.get('/test-connection', async (req, res, next) => {
   }
 });
 
+console.log('🔧 DEBUG: webauthRoutes.js - Exporting router...');
 module.exports = router;

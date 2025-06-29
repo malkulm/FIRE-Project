@@ -191,84 +191,16 @@ router.get('/webauth-url', async (req, res, next) => {
  * Generate webauth URL for bank connection - Alternative endpoint name
  * FIXED: Make connector_id optional for frontend compatibility
  */
-router.get('/url', async (req, res, next) => {
-  try {
-    const { connector_id, user_id = '00000000-0000-0000-0000-000000000001', source } = req.query;
-
-    logger.info('🔗 🆕 AUTH URL: Generating bank connection URL (alternative endpoint)', {
-      connectorId: connector_id,
-      userId: user_id,
-      source,
-      query: req.query,
-      step: 'AUTH_URL_REQUEST'
-    });
-
-    // FIXED: Make connector_id optional - frontend might not provide it initially
-    let actualConnectorId = connector_id;
-    if (!actualConnectorId) {
-      logger.info('⚠️ No connector_id provided, will generate URL without specific connector', {
-        step: 'AUTH_URL_NO_CONNECTOR'
-      });
-    }
-
-    // CRITICAL FIX: Use exact redirect URI from environment variable
-    const redirectUri = process.env.POWENS_REDIRECT_URI;
-    
-    logger.info('🔧 AUTH URL: Using redirect URI configuration', {
-      redirectUri,
-      envVar: process.env.POWENS_REDIRECT_URI,
-      isUndefined: redirectUri === 'undefined' || !redirectUri,
-      hasConnectorId: !!actualConnectorId,
-      step: 'AUTH_URL_CONFIG'
-    });
-
-    if (!redirectUri || redirectUri === 'undefined') {
-      throw new Error('POWENS_REDIRECT_URI environment variable is not set properly');
-    }
-
-    const authUrl = await powensService.auth.generateAuthUrl(user_id, {
-      connectorId: actualConnectorId,
-      redirectUri: redirectUri,
-      state: user_id
-    });
-
-    logger.info('✅ 🔗 AUTH URL: Generated successfully', {
-      userId: user_id,
-      connectorId: actualConnectorId,
-      authUrl: authUrl,
-      redirectUri: redirectUri,
-      step: 'AUTH_URL_SUCCESS'
-    });
-
-    res.json({
-      success: true,
-      data: {
-        webauth_url: authUrl,
-        auth_url: authUrl, // Alternative name
-        state: user_id,
-        connector_id: actualConnectorId,
-        user_id: user_id,
-        redirect_uri: redirectUri
-      },
-      message: 'Navigate to webauth_url to connect your bank account',
+router.get('/url', (req, res, next) => {
+  // Simple test response to verify route registration
+  res.json({
+    success: true,
+    data: {
+      message: 'URL route is working',
+      endpoint: '/api/auth/powens/url',
       timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('❌ 🔗 AUTH URL: Generation failed', {
-      connectorId: req.query.connector_id,
-      userId: req.query.user_id,
-      error: error.message,
-      stack: error.stack,
-      step: 'AUTH_URL_ERROR'
-    });
-    
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate authorization URL',
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+    }
+  });
 });
 
 /**

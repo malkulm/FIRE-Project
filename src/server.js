@@ -60,6 +60,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Favicon handler to prevent 404 errors
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // Domain routes
 app.use('/api/banking', bankingDomain);
 app.use('/api/crypto', cryptoDomain);

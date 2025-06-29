@@ -19,7 +19,10 @@ router.use('/transactions', transactionsRoutes);
 router.use('/webhooks', webhooksRoutes);
 
 // Powens-specific routes (maintain legacy paths)
+// Mount webauth routes first (primary implementation)
 router.use('/auth/powens', webauthRoutes);  // /api/auth/powens/*
-router.use('/auth/powens', option2Routes); // /api/auth/powens/*
+
+// Mount option2 routes on separate path to avoid conflicts
+router.use('/auth/powens/option2', option2Routes); // /api/auth/powens/option2/*
 
 module.exports = router;

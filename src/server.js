@@ -4,14 +4,23 @@ const helmet = require('helmet');
 const path = require('path');
 require('dotenv').config();
 
-// Import shared utilities
-const { logger, database, middleware } = require('./domains/shared');
+const { logger } = require('./utils/logger');
+const database = require('./config/database');
+const rateLimitMiddleware = require('./middleware/rateLimit');
+const errorHandler = require('./middleware/errorHandler');
+const requestLogger = require('./middleware/requestLogger');
 const scheduledSync = require('./jobs/scheduledSync');
 
-// Import domain routes
-const bankingDomain = require('./domains/banking');
-const cryptoDomain = require('./domains/crypto');
+// Import routes
+const authRoutes = require('./routes/auth');
+const accountRoutes = require('./routes/accounts');
+const transactionRoutes = require('./routes/transactions');
+const syncRoutes = require('./routes/sync');
 const apiDocsRoutes = require('./routes/apiDocs');
+const webhookRoutes = require('./routes/webhooks');
+const nexoRoutes = require('./routes/nexo');
+const webauthRoutes = require('./domains/banking/routes/webauthRoutes'); // Use domain version
+const option2Routes = require('./domains/banking/routes/option2Routes'); // Use domain version
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,8 +52,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Logging and rate limiting
-app.use(middleware.requestLogger);
-app.use(middleware.rateLimit);
+app.use(requestLogger);
+app.use(rateLimitMiddleware);
 
 // Serve static files (minimal frontend)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -71,8 +80,8 @@ app.get('/debug/routes', (req, res) => {
         const methods = Object.keys(layer.route.methods);
         routes.push({ path, methods });
       } else if (layer.name === 'router' && layer.regexp) {
-        const pathMatch = layer.regexp.source.match(/^\^\\?\/([^\\?$]*)/);
-        const subPath = pathMatch ? pathMatch[1].replace(/\\\//g, '/') : '';
+        const pathMatch = layer.regexp.source.match(/^\\^\\\\?\\/([^\\\\?$]*)/);
+        const subPath = pathMatch ? pathMatch[1].replace(/\\\\\//g, '/') : '';
         const newBasePath = basePath + '/' + subPath;
         if (layer.handle && layer.handle.stack) {
           extractRoutes(layer.handle.stack, newBasePath);
@@ -92,22 +101,18 @@ app.get('/debug/routes', (req, res) => {
   });
 });
 
-// Favicon handler to prevent 404 errors
-app.get('/favicon.ico', (req, res) => {
-  res.status(204).end();
-});
+// Webhook routes (must come before other routes to handle POST /)
+app.use('/', webhookRoutes);
 
-// Domain routes
-app.use('/api/banking', bankingDomain);
-app.use('/api/crypto', cryptoDomain);
-
-// Legacy routes for backward compatibility (can be removed in future)
-app.use('/api/auth', bankingDomain);
-app.use('/api/accounts', bankingDomain);
-app.use('/api/transactions', bankingDomain);
-app.use('/api/sync', bankingDomain);
-app.use('/api/webhooks', bankingDomain);
-app.use('/api/nexo', cryptoDomain);
+// API routes - ORIGINAL STRUCTURE
+app.use('/api/auth', authRoutes);
+app.use('/api/auth/powens', webauthRoutes); // Option 1: Webauth routes for bank connections
+app.use('/api/auth/powens', option2Routes); // Option 2: Manual API routes for bank connections
+app.use('/api/accounts', accountRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/nexo', nexoRoutes);
 
 // API documentation (if enabled)
 if (process.env.ENABLE_API_DOCS === 'true') {
@@ -162,7 +167,7 @@ app.use('*', (req, res) => {
 });
 
 // Error handling middleware (must be last)
-app.use(middleware.errorHandler);
+app.use(errorHandler);
 
 // Database connection and server startup
 async function startServer() {
@@ -218,15 +223,16 @@ async function startServer() {
             addresses: `http://localhost:${PORT}/api/nexo/addresses`,
             config: `http://localhost:${PORT}/api/nexo/config`
           },
-          // 🆕 NEW: Option 1 - Webauth endpoints for bank connections
+          // Option 1 - Webauth endpoints for bank connections
           powensWebauth: {
             connectors: `http://localhost:${PORT}/api/auth/powens/connectors`,
             webauthUrl: `http://localhost:${PORT}/api/auth/powens/webauth-url?connector_id=CONNECTOR_ID`,
+            url: `http://localhost:${PORT}/api/auth/powens/url`,
             callback: `http://localhost:${PORT}/api/auth/powens/callback`,
             connections: `http://localhost:${PORT}/api/auth/powens/connections`,
             testConnection: `http://localhost:${PORT}/api/auth/powens/test-connection`
           },
-          // 🆕 NEW: Option 2 - Manual API endpoints for bank connections
+          // Option 2 - Manual API endpoints for bank connections
           powensOption2: {
             connectors: `http://localhost:${PORT}/api/auth/powens/connectors`,
             createConnection: `http://localhost:${PORT}/api/auth/powens/create-connection`,
@@ -238,17 +244,16 @@ async function startServer() {
           }
         });
         
-        // 🆕 NEW: Log both webauth and Option 2 flow instructions
-        logger.info('🔗 🆕 OPTION 1 - WEBAUTH FLOW INSTRUCTIONS:', {
+        logger.info('🔗 OPTION 1 - WEBAUTH FLOW INSTRUCTIONS:', {
           step1: 'GET /api/auth/powens/connectors - List available banks',
-          step2: 'GET /api/auth/powens/webauth-url?connector_id=X - Generate bank connection URL',
+          step2: 'GET /api/auth/powens/url - Generate bank connection URL',
           step3: 'User navigates to webauth URL and connects bank',
           step4: 'GET /api/auth/powens/callback - Handles callback automatically',
           step5: 'GET /api/auth/powens/test-connection - Test if connection works',
           step6: 'Now getUserAccounts and getUserTransactions will return data!'
         });
 
-        logger.info('🔗 🆕 OPTION 2 - MANUAL API FLOW INSTRUCTIONS:', {
+        logger.info('🔗 OPTION 2 - MANUAL API FLOW INSTRUCTIONS:', {
           step1: 'GET /api/auth/powens/connectors - List available banks with fields',
           step2: 'POST /api/auth/powens/create-connection - Create connection via API',
           step3: 'GET /api/auth/powens/check-accounts - Check account status',

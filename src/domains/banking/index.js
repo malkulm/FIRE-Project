@@ -12,17 +12,17 @@ const option2Routes = require('./routes/option2Routes');
 const webhooksRoutes = require('./routes/webhooks');
 
 // Banking domain routes
-router.use('/auth', authRoutes);
 router.use('/accounts', accountsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/transactions', transactionsRoutes);
 router.use('/webhooks', webhooksRoutes);
 
 // Powens-specific routes (maintain legacy paths)
-// Mount webauth routes first (primary implementation)
-router.use('/auth/powens', webauthRoutes);  // /api/auth/powens/*
-
-// Mount option2 routes on separate path to avoid conflicts
+// Mount specific routes first to avoid conflicts with general auth routes
+router.use('/auth/powens', webauthRoutes);  // /api/auth/powens/* (primary)
 router.use('/auth/powens/option2', option2Routes); // /api/auth/powens/option2/*
+
+// Mount general auth routes last (fallback)
+router.use('/auth', authRoutes);
 
 module.exports = router;

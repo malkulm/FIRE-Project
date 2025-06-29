@@ -1,5 +1,5 @@
 const { logger } = require('../../shared/utils/logger');
-const powensService = require('./powens/powensService');
+const powensService = require('./powensService');
 const BankConnectionModel = require('../models/BankConnection');
 const BankAccountModel = require('../models/BankAccount');
 const TransactionModel = require('../models/Transaction');

@@ -275,102 +275,199 @@ router.get('/url', async (req, res, next) => {
 /**
  * 🆕 GET /api/auth/powens/callback
  * Handle webauth callback after user connects bank
- * Restored from Clone-FIRE original working version
+ * ENHANCED DEBUGGING VERSION to identify 504 timeout root cause
  */
 router.get('/callback', async (req, res, next) => {
+  const startTime = Date.now();
+  let step = 'CALLBACK_START';
+  
   try {
     logger.info('📨 🆕 WEBAUTH CALLBACK: Received bank connection callback', {
       query: req.query,
-      step: 'CALLBACK_START'
+      headers: {
+        accept: req.headers.accept,
+        userAgent: req.headers['user-agent'],
+        referer: req.headers.referer
+      },
+      step: 'CALLBACK_START',
+      timestamp: new Date().toISOString()
     });
 
-    // FIXED: Use the correct method name
-    const callbackResult = await powensService.auth.exchangeCodeForToken(
-      req.query.id_connection || req.query.connection_id, 
-      req.query.state
-    );
-    const { connection_id, access_token, connection } = callbackResult;
-
-    logger.info('🔄 🆕 CALLBACK: Processing connection data', {
-      connectionId: connection_id,
-      userId: req.query.state,
-      step: 'CALLBACK_PROCESSING'
+    // Add timeout protection for the entire callback
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Callback timeout after 25 seconds')), 25000);
     });
 
-    // Get user's token to fetch connection details
-    const UserModel = require('../models/User');
-    const userTokenData = await UserModel.getPowensToken(req.query.state);
-    
-    if (!userTokenData || !userTokenData.powens_permanent_token) {
-      throw new Error('No user token found');
-    }
-
-    const token = userTokenData.powens_permanent_token;
-
-    // Fetch connection details from Powens API
-    const [connections, accounts] = await Promise.all([
-      powensService.data.getUserConnections(token),
-      powensService.data.getUserAccounts(token, req.query.state)
-    ]);
-
-    logger.info('📊 🆕 CALLBACK: Fetched connection data', {
-      connections: connections.length,
-      accounts: accounts.length,
-      connectionId: connection_id,
-      step: 'CALLBACK_DATA_FETCHED'
-    });
-
-    // Store connection in database
-    let savedConnection = null;
-    if (connections.length > 0) {
-      const connectionToSave = connections.find(c => c.id.toString() === connection_id.toString()) || connections[0];
-      
-      const connectionData = {
-        user_id: req.query.state,
-        powens_user_id: userTokenData.powens_user_id,
-        powens_connection_id: connectionToSave.id,
-        bank_name: connectionToSave.connector?.name || 'Unknown Bank',
-        bank_logo_url: connectionToSave.connector?.logo_url,
-        access_token: token,
-        refresh_token: token,
-        token_expires_at: userTokenData.powens_token_expires_at || new Date(Date.now() + (3600 * 24 * 365 * 1000)),
-        token_source: 'webauth_callback',
-        connection_state: connectionToSave.state,
-        last_sync_at: connectionToSave.last_update
-      };
-
-      savedConnection = await BankConnectionModel.create(connectionData);
-      
-      logger.info('✅ 🆕 CALLBACK: Connection saved to database', {
-        savedConnectionId: savedConnection.id,
-        powensConnectionId: connectionToSave.id,
-        bankName: connectionData.bank_name,
-        step: 'CALLBACK_CONNECTION_SAVED'
+    const callbackWork = async () => {
+      step = 'EXCHANGE_TOKEN';
+      logger.info('🔄 STEP 1: Exchanging code for token', {
+        connectionId: req.query.id_connection || req.query.connection_id,
+        state: req.query.state,
+        step,
+        elapsed: Date.now() - startTime
       });
-    }
 
-    // Store accounts in database
-    let savedAccounts = 0;
-    for (const account of accounts) {
-      const accountData = powensService.data.mapPowensAccountToLocal(
-        account, 
-        req.query.state, 
-        savedConnection ? savedConnection.id : null
+      const callbackResult = await powensService.auth.exchangeCodeForToken(
+        req.query.id_connection || req.query.connection_id, 
+        req.query.state
       );
-      await BankAccountModel.findOrCreateByPowensId(accountData);
-      savedAccounts++;
-    }
+      const { connection_id, access_token, connection } = callbackResult;
+
+      logger.info('✅ STEP 1 COMPLETE: Token exchange successful', {
+        connectionId: connection_id,
+        hasAccessToken: !!access_token,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      step = 'GET_USER_TOKEN';
+      logger.info('🔄 STEP 2: Getting user token', {
+        userId: req.query.state,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      const UserModel = require('../models/User');
+      const userTokenData = await UserModel.getPowensToken(req.query.state);
+      
+      if (!userTokenData || !userTokenData.powens_permanent_token) {
+        throw new Error('No user token found');
+      }
+
+      const token = userTokenData.powens_permanent_token;
+
+      logger.info('✅ STEP 2 COMPLETE: User token retrieved', {
+        hasToken: !!token,
+        powensUserId: userTokenData.powens_user_id,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      step = 'FETCH_API_DATA';
+      logger.info('🔄 STEP 3: Fetching connection and account data from Powens API', {
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      const [connections, accounts] = await Promise.all([
+        powensService.data.getUserConnections(token),
+        powensService.data.getUserAccounts(token, req.query.state)
+      ]);
+
+      logger.info('✅ STEP 3 COMPLETE: API data fetched', {
+        connections: connections.length,
+        accounts: accounts.length,
+        connectionId: connection_id,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      step = 'SAVE_CONNECTION';
+      logger.info('🔄 STEP 4: Saving connection to database', {
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      let savedConnection = null;
+      if (connections.length > 0) {
+        const connectionToSave = connections.find(c => c.id.toString() === connection_id.toString()) || connections[0];
+        
+        const connectionData = {
+          user_id: req.query.state,
+          powens_user_id: userTokenData.powens_user_id,
+          powens_connection_id: connectionToSave.id,
+          bank_name: connectionToSave.connector?.name || 'Unknown Bank',
+          bank_logo_url: connectionToSave.connector?.logo_url,
+          access_token: token,
+          refresh_token: token,
+          token_expires_at: userTokenData.powens_token_expires_at || new Date(Date.now() + (3600 * 24 * 365 * 1000)),
+          token_source: 'webauth_callback',
+          connection_state: connectionToSave.state,
+          last_sync_at: connectionToSave.last_update
+        };
+
+        savedConnection = await BankConnectionModel.create(connectionData);
+        
+        logger.info('✅ STEP 4 COMPLETE: Connection saved to database', {
+          savedConnectionId: savedConnection.id,
+          powensConnectionId: connectionToSave.id,
+          bankName: connectionData.bank_name,
+          step,
+          elapsed: Date.now() - startTime
+        });
+      }
+
+      step = 'SAVE_ACCOUNTS';
+      logger.info('🔄 STEP 5: Saving accounts to database', {
+        accountCount: accounts.length,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      let savedAccounts = 0;
+      for (const account of accounts) {
+        const accountData = powensService.data.mapPowensAccountToLocal(
+          account, 
+          req.query.state, 
+          savedConnection ? savedConnection.id : null
+        );
+        await BankAccountModel.findOrCreateByPowensId(accountData);
+        savedAccounts++;
+        
+        // Log every few accounts to track progress
+        if (savedAccounts % 5 === 0 || savedAccounts === accounts.length) {
+          logger.info(`💾 Account save progress: ${savedAccounts}/${accounts.length}`, {
+            step,
+            elapsed: Date.now() - startTime
+          });
+        }
+      }
+
+      logger.info('✅ STEP 5 COMPLETE: All accounts saved', {
+        savedAccounts,
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      step = 'PREPARE_RESPONSE';
+      logger.info('🔄 STEP 6: Preparing response', {
+        acceptHeader: req.headers.accept,
+        isJsonRequest: req.headers.accept && req.headers.accept.includes('application/json'),
+        step,
+        elapsed: Date.now() - startTime
+      });
+
+      // Return the data for response
+      return {
+        connection_id,
+        savedConnection,
+        savedAccounts,
+        req
+      };
+    };
+
+    // Race between the callback work and timeout
+    const result = await Promise.race([callbackWork(), timeoutPromise]);
+    const { connection_id, savedConnection, savedAccounts } = result;
 
     logger.info('✅ 🆕 CALLBACK: Bank connection completed successfully', {
       connectionId: connection_id,
       userId: req.query.state,
       savedConnectionId: savedConnection?.id,
       savedAccounts,
+      totalElapsed: Date.now() - startTime,
       step: 'CALLBACK_SUCCESS'
+    });
+
+    step = 'SEND_RESPONSE';
+    logger.info('🔄 STEP 7: Sending response to client', {
+      step,
+      elapsed: Date.now() - startTime
     });
 
     // Redirect to success page or return JSON based on Accept header
     if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      logger.info('📤 Sending JSON response', { step, elapsed: Date.now() - startTime });
       res.json({
         success: true,
         data: {
@@ -384,29 +481,63 @@ router.get('/callback', async (req, res, next) => {
         timestamp: new Date().toISOString()
       });
     } else {
-      // Redirect to frontend with success parameters (matches Clone-FIRE behavior)
       const redirectUrl = process.env.FRONTEND_SUCCESS_URL || '/';
-      res.redirect(`${redirectUrl}?success=true&connection_id=${connection_id}&accounts=${savedAccounts}`);
+      const finalRedirectUrl = `${redirectUrl}?success=true&connection_id=${connection_id}&accounts=${savedAccounts}`;
+      
+      logger.info('🔀 Sending redirect response', { 
+        redirectUrl: finalRedirectUrl,
+        step, 
+        elapsed: Date.now() - startTime 
+      });
+      
+      res.redirect(finalRedirectUrl);
     }
+
+    logger.info('✅ STEP 7 COMPLETE: Response sent successfully', {
+      step,
+      totalElapsed: Date.now() - startTime
+    });
 
   } catch (error) {
     logger.error('❌ 🆕 CALLBACK: Processing failed', {
       query: req.query,
       error: error.message,
-      step: 'CALLBACK_ERROR'
+      stack: error.stack,
+      step: step,
+      elapsed: Date.now() - startTime,
+      timestamp: new Date().toISOString()
     });
 
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      res.status(500).json({
-        success: false,
-        error: 'Callback processing failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
+    try {
+      if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        logger.info('📤 Sending JSON error response', { step: 'ERROR_JSON_RESPONSE' });
+        res.status(500).json({
+          success: false,
+          error: 'Callback processing failed',
+          message: error.message,
+          step: step,
+          elapsed: Date.now() - startTime,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        const errorUrl = process.env.FRONTEND_ERROR_URL || '/';
+        const finalErrorUrl = `${errorUrl}?error=true&message=${encodeURIComponent(error.message)}&step=${step}`;
+        
+        logger.info('🔀 Sending error redirect response', { 
+          errorUrl: finalErrorUrl,
+          step: 'ERROR_REDIRECT_RESPONSE'
+        });
+        
+        res.redirect(finalErrorUrl);
+      }
+      
+      logger.info('✅ Error response sent successfully', { step: 'ERROR_RESPONSE_SENT' });
+    } catch (responseError) {
+      logger.error('❌ Failed to send error response', {
+        originalError: error.message,
+        responseError: responseError.message,
+        step: 'ERROR_RESPONSE_FAILED'
       });
-    } else {
-      // Redirect to frontend with error parameters (matches Clone-FIRE behavior)
-      const errorUrl = process.env.FRONTEND_ERROR_URL || '/';
-      res.redirect(`${errorUrl}?error=true&message=${encodeURIComponent(error.message)}`);
     }
   }
 });

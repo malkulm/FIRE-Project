@@ -69,35 +69,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug endpoint to list registered routes
+// Simple debug endpoint
 app.get('/debug/routes', (req, res) => {
-  const routes = [];
-  
-  function extractRoutes(stack, basePath = '') {
-    stack.forEach(layer => {
-      if (layer.route) {
-        const path = basePath + layer.route.path;
-        const methods = Object.keys(layer.route.methods);
-        routes.push({ path, methods });
-      } else if (layer.name === 'router' && layer.regexp) {
-        const pathMatch = layer.regexp.source.match(/^\^\\?\\/([^\\?$]*)/);
-        const subPath = pathMatch ? pathMatch[1].replace(/\\\//g, '/') : '';
-        const newBasePath = basePath + '/' + subPath;
-        if (layer.handle && layer.handle.stack) {
-          extractRoutes(layer.handle.stack, newBasePath);
-        }
-      }
-    });
-  }
-  
-  extractRoutes(app._router.stack);
-  
   res.json({
     success: true,
-    data: {
-      totalRoutes: routes.length,
-      routes: routes.sort((a, b) => a.path.localeCompare(b.path))
-    }
+    message: 'Routes are working - check specific endpoints directly',
+    endpoints: [
+      'GET /health',
+      'GET /api/auth/powens/url',
+      'GET /api/auth/powens/connections',
+      'GET /api/auth/powens/connectors'
+    ],
+    timestamp: new Date().toISOString()
   });
 });
 

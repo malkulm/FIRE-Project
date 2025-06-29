@@ -50,7 +50,7 @@ async function launchPowensConnector() {
         status.textContent = 'Preparing Powens connection...';
         status.style.color = '#f39c12';
         
-        // Get authorization URL
+        // Get authorization URL (using correct route path)
         const response = await fetch('/api/auth/powens/url');
         const data = await response.json();
         

@@ -4,23 +4,14 @@ const helmet = require('helmet');
 const path = require('path');
 require('dotenv').config();
 
-const { logger } = require('./utils/logger');
-const database = require('./config/database');
-const rateLimitMiddleware = require('./middleware/rateLimit');
-const errorHandler = require('./middleware/errorHandler');
-const requestLogger = require('./middleware/requestLogger');
+// Import shared utilities
+const { logger, database, middleware } = require('./domains/shared');
 const scheduledSync = require('./jobs/scheduledSync');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const accountRoutes = require('./routes/accounts');
-const transactionRoutes = require('./routes/transactions');
-const syncRoutes = require('./routes/sync');
+// Import domain routes
+const bankingDomain = require('./domains/banking');
+const cryptoDomain = require('./domains/crypto');
 const apiDocsRoutes = require('./routes/apiDocs');
-const webhookRoutes = require('./routes/webhooks');
-const nexoRoutes = require('./routes/nexo');
-const webauthRoutes = require('./routes/webauthRoutes'); // 🆕 NEW: Webauth routes (Option 1)
-const option2Routes = require('./routes/option2Routes'); // 🆕 NEW: Option 2 manual API routes
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,8 +43,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Logging and rate limiting
-app.use(requestLogger);
-app.use(rateLimitMiddleware);
+app.use(middleware.requestLogger);
+app.use(middleware.rateLimit);
 
 // Serve static files (minimal frontend)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -69,18 +60,17 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Webhook routes (must come before other routes to handle POST /)
-app.use('/', webhookRoutes);
+// Domain routes
+app.use('/api/banking', bankingDomain);
+app.use('/api/crypto', cryptoDomain);
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/auth/powens', webauthRoutes); // 🆕 Option 1: Webauth routes for bank connections
-app.use('/api/auth/powens', option2Routes); // 🆕 Option 2: Manual API routes for bank connections
-app.use('/api/accounts', accountRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/api/webhooks', webhookRoutes);
-app.use('/api/nexo', nexoRoutes);
+// Legacy routes for backward compatibility (can be removed in future)
+app.use('/api/auth', bankingDomain);
+app.use('/api/accounts', bankingDomain);
+app.use('/api/transactions', bankingDomain);
+app.use('/api/sync', bankingDomain);
+app.use('/api/webhooks', bankingDomain);
+app.use('/api/nexo', cryptoDomain);
 
 // API documentation (if enabled)
 if (process.env.ENABLE_API_DOCS === 'true') {
@@ -135,7 +125,7 @@ app.use('*', (req, res) => {
 });
 
 // Error handling middleware (must be last)
-app.use(errorHandler);
+app.use(middleware.errorHandler);
 
 // Database connection and server startup
 async function startServer() {

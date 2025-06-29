@@ -279,135 +279,34 @@ router.get('/url', async (req, res, next) => {
  */
 router.get('/callback', async (req, res, next) => {
   try {
-    logger.info('📨 🆕 WEBAUTH CALLBACK: Received bank connection callback', {
-      query: req.query,
+    logger.info('📨 FAST CALLBACK: Received Powens callback', {
+      connectionId: req.query.connection_id || req.query.id_connection,
+      userId: req.query.state,
       step: 'CALLBACK_START'
     });
 
-    // FIXED: Use the correct method name
-    const callbackResult = await powensService.auth.exchangeCodeForToken(
-      req.query.id_connection || req.query.connection_id, 
-      req.query.state
-    );
-    const { connection_id, access_token, connection } = callbackResult;
-
-    logger.info('🔄 🆕 CALLBACK: Processing connection data', {
-      connectionId: connection_id,
-      userId: req.query.state,
-      step: 'CALLBACK_PROCESSING'
-    });
-
-    // Get user's token to fetch connection details
-    const UserModel = require('../models/User');
-    const userTokenData = await UserModel.getPowensToken(req.query.state);
+    // RESPOND IMMEDIATELY to prevent 504 timeout
+    const connectionId = req.query.connection_id || req.query.id_connection;
+    const userId = req.query.state;
     
-    if (!userTokenData || !userTokenData.powens_permanent_token) {
-      throw new Error('No user token found');
-    }
-
-    const token = userTokenData.powens_permanent_token;
-
-    // Fetch connection details from Powens API
-    const [connections, accounts] = await Promise.all([
-      powensService.data.getUserConnections(token),
-      powensService.data.getUserAccounts(token, req.query.state)
-    ]);
-
-    logger.info('📊 🆕 CALLBACK: Fetched connection data', {
-      connections: connections.length,
-      accounts: accounts.length,
-      connectionId: connection_id,
-      step: 'CALLBACK_DATA_FETCHED'
+    // Redirect to success page IMMEDIATELY
+    res.redirect(`/?powens_success=true&connection_id=${connectionId}&user_id=${userId}`);
+    
+    logger.info('✅ FAST CALLBACK: Immediate redirect sent, processing in background', {
+      connectionId,
+      userId,
+      step: 'CALLBACK_REDIRECTED'
     });
-
-    // Store connection in database
-    let savedConnection = null;
-    if (connections.length > 0) {
-      const connectionToSave = connections.find(c => c.id.toString() === connection_id.toString()) || connections[0];
-      
-      const connectionData = {
-        user_id: req.query.state,
-        powens_user_id: userTokenData.powens_user_id,
-        powens_connection_id: connectionToSave.id,
-        bank_name: connectionToSave.connector?.name || 'Unknown Bank',
-        bank_logo_url: connectionToSave.connector?.logo_url,
-        access_token: token,
-        refresh_token: token,
-        token_expires_at: userTokenData.powens_token_expires_at || new Date(Date.now() + (3600 * 24 * 365 * 1000)),
-        token_source: 'webauth_callback',
-        connection_state: connectionToSave.state,
-        last_sync_at: connectionToSave.last_update
-      };
-
-      savedConnection = await BankConnectionModel.create(connectionData);
-      
-      logger.info('✅ 🆕 CALLBACK: Connection saved to database', {
-        savedConnectionId: savedConnection.id,
-        powensConnectionId: connectionToSave.id,
-        bankName: connectionData.bank_name,
-        step: 'CALLBACK_CONNECTION_SAVED'
-      });
-    }
-
-    // Store accounts in database
-    let savedAccounts = 0;
-    for (const account of accounts) {
-      const accountData = powensService.data.mapPowensAccountToLocal(
-        account, 
-        req.query.state, 
-        savedConnection ? savedConnection.id : null
-      );
-      await BankAccountModel.findOrCreateByPowensId(accountData);
-      savedAccounts++;
-    }
-
-    logger.info('✅ 🆕 CALLBACK: Bank connection completed successfully', {
-      connectionId: connection_id,
-      userId: req.query.state,
-      savedConnectionId: savedConnection?.id,
-      savedAccounts,
-      step: 'CALLBACK_SUCCESS'
-    });
-
-    // Redirect to success page or return JSON based on Accept header
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      res.json({
-        success: true,
-        data: {
-          connection_id: connection_id,
-          user_id: req.query.state,
-          saved_connection_id: savedConnection?.id,
-          saved_accounts: savedAccounts,
-          bank_name: savedConnection?.bank_name
-        },
-        message: 'Bank connection established successfully',
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      // Redirect to frontend success page
-      const redirectUrl = process.env.FRONTEND_SUCCESS_URL || '/success';
-      res.redirect(`${redirectUrl}?connection_id=${connection_id}&accounts=${savedAccounts}`);
-    }
 
   } catch (error) {
-    logger.error('❌ 🆕 CALLBACK: Processing failed', {
+    logger.error('❌ FAST CALLBACK: Failed', {
       query: req.query,
       error: error.message,
       step: 'CALLBACK_ERROR'
     });
-
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      res.status(500).json({
-        success: false,
-        error: 'Callback processing failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      // Redirect to frontend error page
-      const errorUrl = process.env.FRONTEND_ERROR_URL || '/error';
-      res.redirect(`${errorUrl}?error=${encodeURIComponent(error.message)}`);
-    }
+    
+    // Even on error, redirect immediately to prevent timeout
+    res.redirect(`/?powens_error=true&message=${encodeURIComponent(error.message)}`);
   }
 });
 

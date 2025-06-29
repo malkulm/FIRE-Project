@@ -1,7 +1,12 @@
 // Shared Domain Entry Point
+const { logger, logAPICall, logDBOperation, logAuth } = require('./utils/logger');
+
 module.exports = {
   database: require('./config/database'),
-  logger: require('./utils/logger'),
+  logger,
+  logAPICall,
+  logDBOperation, 
+  logAuth,
   migrationRunner: require('./utils/migrationRunner'),
   middleware: {
     errorHandler: require('./middleware/errorHandler'),

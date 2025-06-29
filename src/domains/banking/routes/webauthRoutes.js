@@ -275,6 +275,7 @@ router.get('/url', async (req, res, next) => {
 /**
  * 🆕 GET /api/auth/powens/callback
  * Handle webauth callback after user connects bank
+ * Restored from Clone-FIRE original working version
  */
 router.get('/callback', async (req, res, next) => {
   try {

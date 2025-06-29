@@ -1,5 +1,5 @@
-const database = require('../config/database');
-const { logger, logDBOperation } = require('../utils/logger');
+const database = require('../../shared/config/database');
+const { logger, logDBOperation } = require('../../shared/utils/logger');
 
 class BankAccountModel {
   // Create a new bank account

@@ -1,5 +1,5 @@
-const database = require('../config/database');
-const { logger, logDBOperation } = require('../utils/logger');
+const database = require('../../shared/config/database');
+const { logger, logDBOperation } = require('../../shared/utils/logger');
 const crypto = require('crypto');
 
 // Encryption helper functions

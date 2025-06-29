@@ -16,8 +16,10 @@ router.use('/auth', authRoutes);
 router.use('/accounts', accountsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/transactions', transactionsRoutes);
-router.use('/webauth', webauthRoutes);
-router.use('/option2', option2Routes);
 router.use('/webhooks', webhooksRoutes);
+
+// Powens-specific routes (maintain legacy paths)
+router.use('/auth/powens', webauthRoutes);  // /api/auth/powens/*
+router.use('/auth/powens', option2Routes); // /api/auth/powens/*
 
 module.exports = router;
